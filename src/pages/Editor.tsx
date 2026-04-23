@@ -117,6 +117,7 @@ export default function Editor() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [pubDate, setPubDate] = useState(new Date().toISOString().split('T')[0]);
+  const [category, setCategory] = useState('未分类');
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [saving, setSaving] = useState(false);
@@ -124,6 +125,7 @@ export default function Editor() {
   const [newSlug, setNewSlug] = useState('');
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showTurnInto, setShowTurnInto] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
   // Slash command menu state
   const [slashOpen, setSlashOpen] = useState(false);
@@ -136,6 +138,10 @@ export default function Editor() {
   const [mathDialog, setMathDialog] = useState<{ type: 'block' | 'inline' } | null>(null);
   const [mathFormula, setMathFormula] = useState('');
   const mathInputRef = useRef<HTMLTextAreaElement>(null);
+
+  const insertSymbol = useCallback((symbol: string) => {
+    editor?.chain().focus().insertContent(symbol).run();
+  }, [editor]);
 
   const editor = useEditor({
     extensions: [
@@ -288,14 +294,20 @@ export default function Editor() {
   // Load existing post
   useEffect(() => {
     if (slug && editor) {
-      fetchPost(slug).then((post) => {
-        setTitle(post.frontmatter.title);
-        setDescription(post.frontmatter.description);
-        setPubDate(post.frontmatter.pubDate);
-        setTags(post.frontmatter.tags);
-        // Convert markdown to HTML for TipTap (simple approach)
-        editor.commands.setContent(markdownToHtml(post.content));
-      });
+      setLoadError('');
+      fetchPost(slug)
+        .then((post) => {
+          setTitle(post.frontmatter.title);
+          setDescription(post.frontmatter.description);
+          setPubDate(post.frontmatter.pubDate);
+          setCategory(post.frontmatter.category || '未分类');
+          setTags(post.frontmatter.tags);
+          editor.commands.setContent(markdownToHtml(post.content));
+        })
+        .catch((err: any) => {
+          console.error('Failed to load post:', err);
+          setLoadError(err?.message || '加载文章失败');
+        });
     }
   }, [slug, editor]);
 
@@ -338,7 +350,7 @@ export default function Editor() {
       }
 
       // Heading
-      const headingMatch = line.match(/^(#{1,3})\s+(.+)$/);
+      const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
       if (headingMatch) {
         const level = headingMatch[1].length;
         blocks.push(`<h${level}>${inlineFormat(headingMatch[2])}</h${level}>`);
@@ -410,6 +422,10 @@ export default function Editor() {
       }
       if (paraLines.length > 0) {
         blocks.push(`<p>${inlineFormat(paraLines.join(' '))}</p>`);
+      } else {
+        // Prevent unsupported block syntax from trapping the parser on the same line.
+        blocks.push(`<p>${inlineFormat(line)}</p>`);
+        i++;
       }
     }
 
@@ -540,6 +556,7 @@ export default function Editor() {
         title,
         description,
         pubDate,
+        category: category.trim() || '未分类',
         tags,
         updatedDate: isNew ? null : new Date().toISOString().split('T')[0],
       };
@@ -571,7 +588,7 @@ export default function Editor() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [title, description, pubDate, tags, editor, slug, newSlug]);
+  }, [title, description, pubDate, category, tags, editor, slug, newSlug]);
 
   // Auto-save: debounce 30 seconds after any edit (only for existing posts)
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -586,12 +603,12 @@ export default function Editor() {
         try {
           const content = htmlToMarkdown();
           // Skip save if content hasn't changed
-          const snapshot = JSON.stringify({ title, description, pubDate, tags, content });
+          const snapshot = JSON.stringify({ title, description, pubDate, category, tags, content });
           if (snapshot === lastSavedRef.current) return;
           lastSavedRef.current = snapshot;
 
           const frontmatter = {
-            title, description, pubDate, tags,
+            title, description, pubDate, category: category.trim() || '未分类', tags,
             updatedDate: new Date().toISOString().split('T')[0],
           };
           await updatePost(slug, { frontmatter, content });
@@ -608,7 +625,7 @@ export default function Editor() {
       editor.off('update', onUpdate);
       if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     };
-  }, [editor, slug, isNew, title, description, pubDate, tags]);
+  }, [editor, slug, isNew, title, description, pubDate, category, tags]);
 
   const addTag = () => {
     const t = tagInput.trim();
@@ -623,6 +640,29 @@ export default function Editor() {
   };
 
   // Slash command items
+  const yijingSlashItems = [
+    { id: 'yin-yao', label: '阴爻', desc: '易经阴爻符号', shortcut: '⚋', icon: <span className="text-lg leading-none">⚋</span>,
+      action: () => insertSymbol('⚋') },
+    { id: 'yang-yao', label: '阳爻', desc: '易经阳爻符号', shortcut: '⚊', icon: <span className="text-lg leading-none">⚊</span>,
+      action: () => insertSymbol('⚊') },
+    { id: 'qian', label: '乾', desc: '天卦', shortcut: '☰', icon: <span className="text-lg leading-none">☰</span>,
+      action: () => insertSymbol('☰') },
+    { id: 'dui', label: '兑', desc: '泽卦', shortcut: '☱', icon: <span className="text-lg leading-none">☱</span>,
+      action: () => insertSymbol('☱') },
+    { id: 'li', label: '离', desc: '火卦', shortcut: '☲', icon: <span className="text-lg leading-none">☲</span>,
+      action: () => insertSymbol('☲') },
+    { id: 'zhen', label: '震', desc: '雷卦', shortcut: '☳', icon: <span className="text-lg leading-none">☳</span>,
+      action: () => insertSymbol('☳') },
+    { id: 'xun', label: '巽', desc: '风卦', shortcut: '☴', icon: <span className="text-lg leading-none">☴</span>,
+      action: () => insertSymbol('☴') },
+    { id: 'kan', label: '坎', desc: '水卦', shortcut: '☵', icon: <span className="text-lg leading-none">☵</span>,
+      action: () => insertSymbol('☵') },
+    { id: 'gen', label: '艮', desc: '山卦', shortcut: '☶', icon: <span className="text-lg leading-none">☶</span>,
+      action: () => insertSymbol('☶') },
+    { id: 'kun', label: '坤', desc: '地卦', shortcut: '☷', icon: <span className="text-lg leading-none">☷</span>,
+      action: () => insertSymbol('☷') },
+  ];
+
   const slashItems = [
     { id: 'h1', label: '标题 1', desc: '大标题', shortcut: '#', icon: <Heading1 className="w-4 h-4" />,
       action: () => editor?.chain().focus().toggleHeading({ level: 1 }).run() },
@@ -655,6 +695,7 @@ export default function Editor() {
       action: () => { setMathDialog({ type: 'block' }); setMathFormula(''); }},
     { id: 'math-inline', label: '行内公式', desc: 'LaTeX 行内公式', shortcut: '$', icon: <span className="text-sm font-bold">∑</span>,
       action: () => { setMathDialog({ type: 'inline' }); setMathFormula(''); }},
+    ...yijingSlashItems,
   ];
 
   const filteredSlashItems = slashItems.filter(item =>
@@ -910,7 +951,7 @@ export default function Editor() {
           className="w-full text-base text-notion-text-secondary placeholder:text-notion-text-placeholder focus:outline-none mb-4"
         />
 
-        {/* Meta: date & tags */}
+        {/* Meta: date, category & tags */}
         <div className="flex flex-wrap items-center gap-4 mb-8 pb-6 border-b border-notion-border text-sm">
           <div className="flex items-center gap-1.5 text-notion-text-secondary">
             <Calendar className="w-3.5 h-3.5" />
@@ -919,6 +960,16 @@ export default function Editor() {
               value={pubDate}
               onChange={(e) => setPubDate(e.target.value)}
               className="bg-transparent focus:outline-none text-notion-text"
+            />
+          </div>
+          <div className="flex items-center gap-1.5 text-notion-text-secondary">
+            <Tag className="w-3.5 h-3.5" />
+            <input
+              type="text"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              placeholder="分类，例如：AI、后端、随笔"
+              className="min-w-[180px] bg-transparent focus:outline-none text-notion-text"
             />
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -1001,6 +1052,12 @@ export default function Editor() {
             <span className="text-xs font-bold leading-none">∑</span>
           </ToolBtn>
         </div>
+
+        {loadError && (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {loadError}
+          </div>
+        )}
 
         {/* Editor content (relative for slash menu positioning) */}
         <div className="relative">

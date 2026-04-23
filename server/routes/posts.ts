@@ -9,6 +9,11 @@ const BLOG_CONTENT_DIR = path.resolve(__dirname, '../../../blog/src/content/blog
 
 const router = Router();
 
+function normalizeCategory(category: unknown) {
+  const value = String(category || '').trim();
+  return value || '未分类';
+}
+
 // GET /api/posts - List all posts
 router.get('/', async (_req, res) => {
   try {
@@ -27,6 +32,7 @@ router.get('/', async (_req, res) => {
           title: data.title || filename,
           description: data.description || '',
           pubDate: data.pubDate || stat.mtime.toISOString().split('T')[0],
+          category: normalizeCategory(data.category),
           tags: data.tags || [],
           updatedDate: data.updatedDate || null,
         };
@@ -72,6 +78,7 @@ router.get('/:slug', async (req, res) => {
         title: data.title || '',
         description: data.description || '',
         pubDate: data.pubDate ? new Date(data.pubDate).toISOString().split('T')[0] : '',
+        category: normalizeCategory(data.category),
         tags: data.tags || [],
         updatedDate: data.updatedDate || null,
       },
@@ -103,6 +110,7 @@ router.post('/', async (req, res) => {
       title: frontmatter.title,
       description: frontmatter.description || '',
       pubDate: frontmatter.pubDate || new Date().toISOString().split('T')[0],
+      category: normalizeCategory(frontmatter.category),
       tags: frontmatter.tags || [],
     });
 
@@ -132,6 +140,7 @@ router.put('/:slug', async (req, res) => {
       title: frontmatter.title,
       description: frontmatter.description || '',
       pubDate: frontmatter.pubDate,
+      category: normalizeCategory(frontmatter.category),
       tags: frontmatter.tags || [],
     };
     if (frontmatter.updatedDate) {

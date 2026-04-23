@@ -40,6 +40,11 @@ function sanitizeSlug(slug) {
   return String(slug || '').trim().replace(/[\\/]/g, '');
 }
 
+function normalizeCategory(category) {
+  const value = String(category || '').trim();
+  return value || '未分类';
+}
+
 async function pathExists(targetPath) {
   try {
     await fs.access(targetPath);
@@ -235,6 +240,7 @@ ipcMain.handle('posts:list', async () => {
         title: data.title || filename,
         description: data.description || '',
         pubDate: data.pubDate || stat.mtime.toISOString().split('T')[0],
+        category: normalizeCategory(data.category),
         tags: data.tags || [],
         updatedDate: data.updatedDate || null,
       };
@@ -261,6 +267,7 @@ ipcMain.handle('posts:get', async (_event, slug) => {
       title: data.title || '',
       description: data.description || '',
       pubDate: data.pubDate ? new Date(data.pubDate).toISOString().split('T')[0] : '',
+      category: normalizeCategory(data.category),
       tags: data.tags || [],
       updatedDate: data.updatedDate || null,
     },
@@ -295,6 +302,7 @@ ipcMain.handle('posts:create', async (_event, payload) => {
     title: frontmatter.title,
     description: frontmatter.description || '',
     pubDate: frontmatter.pubDate || new Date().toISOString().split('T')[0],
+    category: normalizeCategory(frontmatter.category),
     tags: frontmatter.tags || [],
   });
 
@@ -314,6 +322,7 @@ ipcMain.handle('posts:update', async (_event, slug, payload) => {
     title: frontmatter.title || '',
     description: frontmatter.description || '',
     pubDate: frontmatter.pubDate || '',
+    category: normalizeCategory(frontmatter.category),
     tags: frontmatter.tags || [],
   };
 

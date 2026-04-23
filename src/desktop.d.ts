@@ -4,6 +4,7 @@ export interface PostMeta {
   title: string;
   description: string;
   pubDate: string;
+  category: string;
   tags: string[];
   updatedDate?: string | null;
 }
@@ -15,6 +16,7 @@ export interface PostDetail {
     title: string;
     description: string;
     pubDate: string;
+    category: string;
     tags: string[];
     updatedDate?: string | null;
   };

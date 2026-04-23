@@ -12,7 +12,7 @@ import {
   type GitStatus,
   type BlogSettings,
 } from '../lib/api';
-import { Plus, Trash2, Edit3, GitBranch, Upload, FileText, Tag, Clock, Settings, FolderOpen, X } from 'lucide-react';
+import { Plus, Trash2, Edit3, GitBranch, Upload, FileText, Tag, Clock, Settings, FolderOpen, X, FolderTree } from 'lucide-react';
 
 export default function PostList() {
   const [posts, setPosts] = useState<PostMeta[]>([]);
@@ -25,6 +25,17 @@ export default function PostList() {
   const [syncMsg, setSyncMsg] = useState('');
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const groupedPosts = posts.reduce<Record<string, PostMeta[]>>((acc, post) => {
+    const key = (post.category || '未分类').trim() || '未分类';
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(post);
+    return acc;
+  }, {});
+  const categoryEntries = Object.entries(groupedPosts).sort((a, b) => {
+    if (a[0] === '未分类') return 1;
+    if (b[0] === '未分类') return -1;
+    return a[0].localeCompare(b[0], 'zh-CN');
+  });
 
   const load = async () => {
     setLoading(true);
@@ -278,47 +289,72 @@ export default function PostList() {
             </button>
           </div>
         ) : (
-          <div className="space-y-1">
-            {posts.map((post) => (
-              <div
-                key={post.slug}
-                className="group flex items-center justify-between py-3 px-3 -mx-3 rounded-md hover:bg-notion-bg-hover transition-colors cursor-pointer"
-                onClick={() => navigate(`/edit/${post.slug}`)}
+          <div className="space-y-5">
+            {categoryEntries.map(([categoryName, categoryPosts]) => (
+              <section
+                key={categoryName}
+                className="rounded-2xl border border-notion-border bg-white shadow-sm overflow-hidden"
               >
-                <div className="flex-1 min-w-0">
-                  <h2 className="text-[15px] font-medium text-notion-text truncate">
-                    {post.title}
-                  </h2>
-                  <div className="flex items-center gap-3 mt-1">
-                    <span className="flex items-center gap-1 text-xs text-notion-text-secondary">
-                      <Clock className="w-3 h-3" />
-                      {post.pubDate}
+                <div className="flex items-center justify-between px-4 py-3 bg-notion-bg-hover/60 border-b border-notion-border">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-50 text-sky-600">
+                      <FolderTree className="w-4 h-4" />
                     </span>
-                    {post.tags.length > 0 && (
-                      <span className="flex items-center gap-1 text-xs text-notion-text-secondary">
-                        <Tag className="w-3 h-3" />
-                        {post.tags.join(', ')}
-                      </span>
-                    )}
+                    <div>
+                      <h2 className="text-sm font-semibold text-notion-text">{categoryName}</h2>
+                      <p className="text-xs text-notion-text-secondary">{categoryPosts.length} 篇文章</p>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); navigate(`/edit/${post.slug}`); }}
-                    className="p-1.5 rounded hover:bg-notion-border transition-colors"
-                    title="编辑"
-                  >
-                    <Edit3 className="w-3.5 h-3.5 text-notion-text-secondary" />
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleDelete(post.slug, post.title); }}
-                    className="p-1.5 rounded hover:bg-red-50 transition-colors"
-                    title="删除"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                  </button>
+
+                <div className="divide-y divide-notion-border">
+                  {categoryPosts.map((post) => (
+                    <div
+                      key={post.slug}
+                      className="group flex items-center justify-between px-4 py-3 hover:bg-notion-bg-hover transition-colors cursor-pointer"
+                      onClick={() => navigate(`/edit/${post.slug}`)}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-[15px] font-medium text-notion-text truncate">
+                          {post.title}
+                        </h3>
+                        <div className="flex items-center gap-3 mt-1 flex-wrap">
+                          <span className="flex items-center gap-1 text-xs text-notion-text-secondary">
+                            <Clock className="w-3 h-3" />
+                            {post.pubDate}
+                          </span>
+                          <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[11px] text-sky-700">
+                            <FolderTree className="w-3 h-3" />
+                            {post.category || '未分类'}
+                          </span>
+                          {post.tags.length > 0 && (
+                            <span className="flex items-center gap-1 text-xs text-notion-text-secondary">
+                              <Tag className="w-3 h-3" />
+                              {post.tags.join(', ')}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); navigate(`/edit/${post.slug}`); }}
+                          className="p-1.5 rounded hover:bg-notion-border transition-colors"
+                          title="编辑"
+                        >
+                          <Edit3 className="w-3.5 h-3.5 text-notion-text-secondary" />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDelete(post.slug, post.title); }}
+                          className="p-1.5 rounded hover:bg-red-50 transition-colors"
+                          title="删除"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
+              </section>
             ))}
           </div>
         )}
