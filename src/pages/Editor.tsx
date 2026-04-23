@@ -139,10 +139,6 @@ export default function Editor() {
   const [mathFormula, setMathFormula] = useState('');
   const mathInputRef = useRef<HTMLTextAreaElement>(null);
 
-  const insertSymbol = useCallback((symbol: string) => {
-    editor?.chain().focus().insertContent(symbol).run();
-  }, [editor]);
-
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -280,6 +276,10 @@ export default function Editor() {
       },
     },
   });
+
+  const insertSymbol = useCallback((symbol: string) => {
+    editor?.chain().focus().insertContent(symbol).run();
+  }, [editor]);
 
   const handleImageUpload = useCallback(async (file: File) => {
     if (!editor) return;
