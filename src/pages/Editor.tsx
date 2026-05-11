@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useEditor, EditorContent, BubbleMenu } from '@tiptap/react';
+import { useEditor, EditorContent, BubbleMenu, NodeViewContent, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import ImageExt from '@tiptap/extension-image';
@@ -23,13 +23,97 @@ import {
   Strikethrough, Code, Link2, List, ListOrdered, Quote,
   Heading1, Heading2, Heading3, Minus, Type, Palette, Highlighter,
   Image as ImageIcon, CheckSquare, Table as TableIcon, Upload,
-  X, Tag, Calendar, ChevronDown, Pilcrow, TextQuote, ListTodo,
-  FileCode2, Sigma,
+  X, Tag, Calendar, ChevronDown, ChevronRight, Pilcrow, TextQuote, ListTodo,
+  FileCode2, Sigma, Copy,
 } from 'lucide-react';
 import TurndownService from 'turndown';
 import { fetchPost, createPost, updatePost, uploadImage } from '../lib/api';
 
 const lowlight = createLowlight(common);
+
+let mermaidPromise: Promise<typeof import('mermaid')['default']> | null = null;
+
+function getMermaid() {
+  if (!mermaidPromise) {
+    mermaidPromise = import('mermaid').then((module) => {
+      module.default.initialize({
+        startOnLoad: false,
+        securityLevel: 'strict',
+        theme: 'default',
+      });
+      return module.default;
+    });
+  }
+
+  return mermaidPromise;
+}
+
+function MermaidPreview({ code }: { code: string }) {
+  const idRef = useRef(`mermaid-preview-${Math.random().toString(36).slice(2)}`);
+  const [svg, setSvg] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    const source = code.trim();
+
+    if (!source) {
+      setSvg('');
+      setError('');
+      return;
+    }
+
+    getMermaid()
+      .then((mermaid) => mermaid.render(idRef.current, source))
+      .then(({ svg }) => {
+        if (cancelled) return;
+        setSvg(svg);
+        setError('');
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setSvg('');
+        setError(err?.message || 'Mermaid 渲染失败');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [code]);
+
+  return (
+    <div className="mermaid-preview" contentEditable={false}>
+      <div className="mermaid-preview__label">Mermaid 预览</div>
+      {error ? (
+        <pre className="mermaid-preview__error">{error}</pre>
+      ) : svg ? (
+        <div className="mermaid-preview__canvas" dangerouslySetInnerHTML={{ __html: svg }} />
+      ) : (
+        <div className="mermaid-preview__empty">输入 Mermaid 代码后会在这里显示图形</div>
+      )}
+    </div>
+  );
+}
+
+function CodeBlockWithMermaidPreview({ node }: { node: any }) {
+  const language = node.attrs?.language || '';
+  const isMermaid = language.toLowerCase() === 'mermaid';
+
+  return (
+    <NodeViewWrapper className={isMermaid ? 'mermaid-code-block' : 'code-block'}>
+      <pre>
+        <NodeViewContent as="code" className={language ? `language-${language}` : ''} />
+      </pre>
+      {isMermaid && <MermaidPreview code={node.textContent || ''} />}
+    </NodeViewWrapper>
+  );
+}
+
+const CodeBlockWithMermaid = CodeBlockLowlight.extend({
+  addNodeView() {
+    return ReactNodeViewRenderer(CodeBlockWithMermaidPreview);
+  },
+});
 
 // --- Turndown (HTML → Markdown) ---
 const turndown = new TurndownService({
@@ -109,6 +193,60 @@ const BG_COLORS = [
   { name: '红色', color: '#fdebec' },
 ];
 
+const CODE_LANGUAGES = [
+  { label: 'Plain Text', value: '' },
+  { label: 'JavaScript', value: 'javascript' },
+  { label: 'TypeScript', value: 'typescript' },
+  { label: 'Python', value: 'python' },
+  { label: 'PowerShell', value: 'powershell' },
+  { label: 'Bash', value: 'bash' },
+  { label: 'JSON', value: 'json' },
+  { label: 'HTML', value: 'html' },
+  { label: 'CSS', value: 'css' },
+  { label: 'Markdown', value: 'markdown' },
+  { label: 'Mermaid 图表', value: 'mermaid' },
+];
+
+function stripWrappedFormula(value: string, open: string, close: string) {
+  let next = value.trim();
+  while (next.startsWith(open) && next.endsWith(close) && next.length >= open.length + close.length) {
+    next = next.slice(open.length, next.length - close.length).trim();
+  }
+  return next;
+}
+
+function normalizeMathFormula(value: string, type: 'block' | 'inline') {
+  let formula = value.replace(/\u200B/g, '').trim();
+  const pairs: Array<[string, string]> = type === 'block'
+    ? [['$$', '$$'], ['\\[', '\\]'], ['$', '$'], ['\\(', '\\)']]
+    : [['$$', '$$'], ['$', '$'], ['\\(', '\\)'], ['\\[', '\\]']];
+
+  for (const [open, close] of pairs) {
+    formula = stripWrappedFormula(formula, open, close);
+  }
+
+  return formula;
+}
+
+const EMPTY_PARAGRAPH_MARKDOWN = '<p>&nbsp;</p>';
+const EMPTY_PARAGRAPH_HTML_RE = /^<p>(?:&nbsp;|\s|<br\s*\/?>)*<\/p>$/i;
+
+type SlashItem = {
+  id: string;
+  label: string;
+  desc: string;
+  shortcut?: string;
+  icon: React.ReactNode;
+  action?: () => void;
+  children?: SlashItem[];
+};
+
+type YijingGroup = {
+  id: string;
+  title: string;
+  items: SlashItem[];
+};
+
 export default function Editor() {
   const { slug } = useParams<{ slug: string }>();
   const isNew = !slug;
@@ -131,6 +269,7 @@ export default function Editor() {
   const [slashOpen, setSlashOpen] = useState(false);
   const [slashFilter, setSlashFilter] = useState('');
   const [slashIndex, setSlashIndex] = useState(0);
+  const [slashSubmenuId, setSlashSubmenuId] = useState<string | null>(null);
   const slashPos = useRef<{ top: number; left: number } | null>(null);
   const slashFromPos = useRef<number>(0);
 
@@ -157,7 +296,7 @@ export default function Editor() {
       TableRow,
       TableCell,
       TableHeader,
-      CodeBlockLowlight.configure({ lowlight }),
+      CodeBlockWithMermaid.configure({ lowlight }),
       MathBlock,
       MathInline,
     ],
@@ -182,6 +321,7 @@ export default function Editor() {
             slashFromPos.current = from - 1; // position of the '/'
             setSlashFilter('');
             setSlashIndex(0);
+            setSlashSubmenuId(null);
             setSlashOpen(true);
           }, 0);
           return false;
@@ -191,6 +331,7 @@ export default function Editor() {
         if (slashOpen) {
           if (event.key === 'Escape') {
             setSlashOpen(false);
+            setSlashSubmenuId(null);
             return true;
           }
           if (event.key === 'ArrowDown') {
@@ -221,9 +362,11 @@ export default function Editor() {
               const text = editor.state.doc.textBetween(slashFromPos.current, from);
               if (!text.startsWith('/')) {
                 setSlashOpen(false);
+                setSlashSubmenuId(null);
               } else {
                 setSlashFilter(text.slice(1));
                 setSlashIndex(0);
+                setSlashSubmenuId(null);
               }
             }, 0);
             return false;
@@ -237,8 +380,10 @@ export default function Editor() {
               if (text.startsWith('/')) {
                 setSlashFilter(text.slice(1));
                 setSlashIndex(0);
+                setSlashSubmenuId(null);
               } else {
                 setSlashOpen(false);
+                setSlashSubmenuId(null);
               }
             }, 0);
             return false;
@@ -329,7 +474,7 @@ export default function Editor() {
           i++;
         }
         i++; // skip closing $$
-        const formula = mathLines.join('\n').trim();
+        const formula = normalizeMathFormula(mathLines.join('\n'), 'block');
         blocks.push(`<div data-type="math-block" formula="${formula.replace(/"/g, '&quot;')}"></div>`);
         continue;
       }
@@ -404,6 +549,13 @@ export default function Editor() {
         continue;
       }
 
+      // Explicit blank paragraph marker emitted by this editor.
+      if (EMPTY_PARAGRAPH_HTML_RE.test(line.trim())) {
+        blocks.push('<p></p>');
+        i++;
+        continue;
+      }
+
       // Paragraph — collect consecutive non-empty, non-special lines
       const paraLines: string[] = [];
       while (
@@ -438,7 +590,10 @@ export default function Editor() {
       .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" />')
       .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
       .replace(/`([^`]+)`/g, '<code>$1</code>')
-      .replace(/\$([^$]+)\$/g, (_m, f) => `<span data-type="math-inline" formula="${f.replace(/"/g, '&quot;')}"></span>`)
+      .replace(/(?<!\$)\$([^$\n]+)\$(?!\$)/g, (_m, f) => {
+        const formula = normalizeMathFormula(f, 'inline');
+        return `<span data-type="math-inline" formula="${formula.replace(/"/g, '&quot;')}"></span>`;
+      })
       .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.+?)\*/g, '<em>$1</em>')
@@ -455,7 +610,7 @@ export default function Editor() {
     // Serialize inline content (text, marks, inline nodes) to markdown string
     function inlineToMd(nodes: any[]): string {
       return nodes.map((n: any) => {
-        if (n.type === 'mathInline') return `$${n.attrs?.formula || ''}$`;
+        if (n.type === 'mathInline') return `$${normalizeMathFormula(n.attrs?.formula || '', 'inline')}$`;
         if (n.type === 'image') return `![${n.attrs?.alt || ''}](${n.attrs?.src || ''})`;
         if (n.type === 'hardBreak') return '\n';
         if (n.type !== 'text') return '';
@@ -479,13 +634,13 @@ export default function Editor() {
 
       switch (node.type) {
         case 'paragraph':
-          return inlineToMd(children);
+          return children.length > 0 ? inlineToMd(children) : EMPTY_PARAGRAPH_MARKDOWN;
         case 'heading': {
           const level = node.attrs?.level || 1;
           return '#'.repeat(level) + ' ' + inlineToMd(children);
         }
         case 'mathBlock':
-          return `$$\n${node.attrs?.formula || ''}\n$$`;
+          return `$$\n${normalizeMathFormula(node.attrs?.formula || '', 'block')}\n$$`;
         case 'codeBlock': {
           const lang = node.attrs?.language || '';
           const code = children.map((c: any) => c.text || '').join('');
@@ -640,11 +795,14 @@ export default function Editor() {
   };
 
   // Slash command items
-  const yijingSlashItems = [
+  const yaoSlashItems: SlashItem[] = [
     { id: 'yin-yao', label: '阴爻', desc: '易经阴爻符号', shortcut: '⚋', icon: <span className="text-lg leading-none">⚋</span>,
       action: () => insertSymbol('⚋') },
     { id: 'yang-yao', label: '阳爻', desc: '易经阳爻符号', shortcut: '⚊', icon: <span className="text-lg leading-none">⚊</span>,
       action: () => insertSymbol('⚊') },
+  ];
+
+  const baguaSlashItems: SlashItem[] = [
     { id: 'qian', label: '乾', desc: '天卦', shortcut: '☰', icon: <span className="text-lg leading-none">☰</span>,
       action: () => insertSymbol('☰') },
     { id: 'dui', label: '兑', desc: '泽卦', shortcut: '☱', icon: <span className="text-lg leading-none">☱</span>,
@@ -663,7 +821,82 @@ export default function Editor() {
       action: () => insertSymbol('☷') },
   ];
 
-  const slashItems = [
+  const hexagramSlashItems: SlashItem[] = [
+    { id: 'hex-qian', label: '乾', desc: '第一卦', shortcut: '䷀', icon: <span className="text-base leading-none">䷀</span>, action: () => insertSymbol('䷀') },
+    { id: 'hex-kun', label: '坤', desc: '第二卦', shortcut: '䷁', icon: <span className="text-base leading-none">䷁</span>, action: () => insertSymbol('䷁') },
+    { id: 'hex-zhun', label: '屯', desc: '第三卦', shortcut: '䷂', icon: <span className="text-base leading-none">䷂</span>, action: () => insertSymbol('䷂') },
+    { id: 'hex-meng', label: '蒙', desc: '第四卦', shortcut: '䷃', icon: <span className="text-base leading-none">䷃</span>, action: () => insertSymbol('䷃') },
+    { id: 'hex-xu', label: '需', desc: '第五卦', shortcut: '䷄', icon: <span className="text-base leading-none">䷄</span>, action: () => insertSymbol('䷄') },
+    { id: 'hex-song', label: '讼', desc: '第六卦', shortcut: '䷅', icon: <span className="text-base leading-none">䷅</span>, action: () => insertSymbol('䷅') },
+    { id: 'hex-shi', label: '师', desc: '第七卦', shortcut: '䷆', icon: <span className="text-base leading-none">䷆</span>, action: () => insertSymbol('䷆') },
+    { id: 'hex-bi', label: '比', desc: '第八卦', shortcut: '䷇', icon: <span className="text-base leading-none">䷇</span>, action: () => insertSymbol('䷇') },
+    { id: 'hex-xiaoxu', label: '小畜', desc: '第九卦', shortcut: '䷈', icon: <span className="text-base leading-none">䷈</span>, action: () => insertSymbol('䷈') },
+    { id: 'hex-lu', label: '履', desc: '第十卦', shortcut: '䷉', icon: <span className="text-base leading-none">䷉</span>, action: () => insertSymbol('䷉') },
+    { id: 'hex-tai', label: '泰', desc: '第十一卦', shortcut: '䷊', icon: <span className="text-base leading-none">䷊</span>, action: () => insertSymbol('䷊') },
+    { id: 'hex-pi', label: '否', desc: '第十二卦', shortcut: '䷋', icon: <span className="text-base leading-none">䷋</span>, action: () => insertSymbol('䷋') },
+    { id: 'hex-tongren', label: '同人', desc: '第十三卦', shortcut: '䷌', icon: <span className="text-base leading-none">䷌</span>, action: () => insertSymbol('䷌') },
+    { id: 'hex-dayou', label: '大有', desc: '第十四卦', shortcut: '䷍', icon: <span className="text-base leading-none">䷍</span>, action: () => insertSymbol('䷍') },
+    { id: 'hex-qian2', label: '谦', desc: '第十五卦', shortcut: '䷎', icon: <span className="text-base leading-none">䷎</span>, action: () => insertSymbol('䷎') },
+    { id: 'hex-yu', label: '豫', desc: '第十六卦', shortcut: '䷏', icon: <span className="text-base leading-none">䷏</span>, action: () => insertSymbol('䷏') },
+    { id: 'hex-sui', label: '随', desc: '第十七卦', shortcut: '䷐', icon: <span className="text-base leading-none">䷐</span>, action: () => insertSymbol('䷐') },
+    { id: 'hex-gu', label: '蛊', desc: '第十八卦', shortcut: '䷑', icon: <span className="text-base leading-none">䷑</span>, action: () => insertSymbol('䷑') },
+    { id: 'hex-lin', label: '临', desc: '第十九卦', shortcut: '䷒', icon: <span className="text-base leading-none">䷒</span>, action: () => insertSymbol('䷒') },
+    { id: 'hex-guan', label: '观', desc: '第二十卦', shortcut: '䷓', icon: <span className="text-base leading-none">䷓</span>, action: () => insertSymbol('䷓') },
+    { id: 'hex-shihe', label: '噬嗑', desc: '第二十一卦', shortcut: '䷔', icon: <span className="text-base leading-none">䷔</span>, action: () => insertSymbol('䷔') },
+    { id: 'hex-bi2', label: '贲', desc: '第二十二卦', shortcut: '䷕', icon: <span className="text-base leading-none">䷕</span>, action: () => insertSymbol('䷕') },
+    { id: 'hex-bo', label: '剥', desc: '第二十三卦', shortcut: '䷖', icon: <span className="text-base leading-none">䷖</span>, action: () => insertSymbol('䷖') },
+    { id: 'hex-fu', label: '复', desc: '第二十四卦', shortcut: '䷗', icon: <span className="text-base leading-none">䷗</span>, action: () => insertSymbol('䷗') },
+    { id: 'hex-wuwang', label: '无妄', desc: '第二十五卦', shortcut: '䷘', icon: <span className="text-base leading-none">䷘</span>, action: () => insertSymbol('䷘') },
+    { id: 'hex-daxu', label: '大畜', desc: '第二十六卦', shortcut: '䷙', icon: <span className="text-base leading-none">䷙</span>, action: () => insertSymbol('䷙') },
+    { id: 'hex-yi', label: '颐', desc: '第二十七卦', shortcut: '䷚', icon: <span className="text-base leading-none">䷚</span>, action: () => insertSymbol('䷚') },
+    { id: 'hex-daguo', label: '大过', desc: '第二十八卦', shortcut: '䷛', icon: <span className="text-base leading-none">䷛</span>, action: () => insertSymbol('䷛') },
+    { id: 'hex-kan2', label: '坎', desc: '第二十九卦', shortcut: '䷜', icon: <span className="text-base leading-none">䷜</span>, action: () => insertSymbol('䷜') },
+    { id: 'hex-li2', label: '离', desc: '第三十卦', shortcut: '䷝', icon: <span className="text-base leading-none">䷝</span>, action: () => insertSymbol('䷝') },
+    { id: 'hex-xian', label: '咸', desc: '第三十一卦', shortcut: '䷞', icon: <span className="text-base leading-none">䷞</span>, action: () => insertSymbol('䷞') },
+    { id: 'hex-heng', label: '恒', desc: '第三十二卦', shortcut: '䷟', icon: <span className="text-base leading-none">䷟</span>, action: () => insertSymbol('䷟') },
+    { id: 'hex-dun', label: '遁', desc: '第三十三卦', shortcut: '䷠', icon: <span className="text-base leading-none">䷠</span>, action: () => insertSymbol('䷠') },
+    { id: 'hex-dazhuang', label: '大壮', desc: '第三十四卦', shortcut: '䷡', icon: <span className="text-base leading-none">䷡</span>, action: () => insertSymbol('䷡') },
+    { id: 'hex-jin', label: '晋', desc: '第三十五卦', shortcut: '䷢', icon: <span className="text-base leading-none">䷢</span>, action: () => insertSymbol('䷢') },
+    { id: 'hex-mingyi', label: '明夷', desc: '第三十六卦', shortcut: '䷣', icon: <span className="text-base leading-none">䷣</span>, action: () => insertSymbol('䷣') },
+    { id: 'hex-jiaren', label: '家人', desc: '第三十七卦', shortcut: '䷤', icon: <span className="text-base leading-none">䷤</span>, action: () => insertSymbol('䷤') },
+    { id: 'hex-kui', label: '睽', desc: '第三十八卦', shortcut: '䷥', icon: <span className="text-base leading-none">䷥</span>, action: () => insertSymbol('䷥') },
+    { id: 'hex-jian', label: '蹇', desc: '第三十九卦', shortcut: '䷦', icon: <span className="text-base leading-none">䷦</span>, action: () => insertSymbol('䷦') },
+    { id: 'hex-jie', label: '解', desc: '第四十卦', shortcut: '䷧', icon: <span className="text-base leading-none">䷧</span>, action: () => insertSymbol('䷧') },
+    { id: 'hex-sun', label: '损', desc: '第四十一卦', shortcut: '䷨', icon: <span className="text-base leading-none">䷨</span>, action: () => insertSymbol('䷨') },
+    { id: 'hex-yi2', label: '益', desc: '第四十二卦', shortcut: '䷩', icon: <span className="text-base leading-none">䷩</span>, action: () => insertSymbol('䷩') },
+    { id: 'hex-guai', label: '夬', desc: '第四十三卦', shortcut: '䷪', icon: <span className="text-base leading-none">䷪</span>, action: () => insertSymbol('䷪') },
+    { id: 'hex-gou', label: '姤', desc: '第四十四卦', shortcut: '䷫', icon: <span className="text-base leading-none">䷫</span>, action: () => insertSymbol('䷫') },
+    { id: 'hex-cui', label: '萃', desc: '第四十五卦', shortcut: '䷬', icon: <span className="text-base leading-none">䷬</span>, action: () => insertSymbol('䷬') },
+    { id: 'hex-sheng', label: '升', desc: '第四十六卦', shortcut: '䷭', icon: <span className="text-base leading-none">䷭</span>, action: () => insertSymbol('䷭') },
+    { id: 'hex-kun3', label: '困', desc: '第四十七卦', shortcut: '䷮', icon: <span className="text-base leading-none">䷮</span>, action: () => insertSymbol('䷮') },
+    { id: 'hex-jing', label: '井', desc: '第四十八卦', shortcut: '䷯', icon: <span className="text-base leading-none">䷯</span>, action: () => insertSymbol('䷯') },
+    { id: 'hex-ge', label: '革', desc: '第四十九卦', shortcut: '䷰', icon: <span className="text-base leading-none">䷰</span>, action: () => insertSymbol('䷰') },
+    { id: 'hex-ding', label: '鼎', desc: '第五十卦', shortcut: '䷱', icon: <span className="text-base leading-none">䷱</span>, action: () => insertSymbol('䷱') },
+    { id: 'hex-zhen2', label: '震', desc: '第五十一卦', shortcut: '䷲', icon: <span className="text-base leading-none">䷲</span>, action: () => insertSymbol('䷲') },
+    { id: 'hex-gen2', label: '艮', desc: '第五十二卦', shortcut: '䷳', icon: <span className="text-base leading-none">䷳</span>, action: () => insertSymbol('䷳') },
+    { id: 'hex-jian2', label: '渐', desc: '第五十三卦', shortcut: '䷴', icon: <span className="text-base leading-none">䷴</span>, action: () => insertSymbol('䷴') },
+    { id: 'hex-guimei', label: '归妹', desc: '第五十四卦', shortcut: '䷵', icon: <span className="text-base leading-none">䷵</span>, action: () => insertSymbol('䷵') },
+    { id: 'hex-feng', label: '丰', desc: '第五十五卦', shortcut: '䷶', icon: <span className="text-base leading-none">䷶</span>, action: () => insertSymbol('䷶') },
+    { id: 'hex-lv', label: '旅', desc: '第五十六卦', shortcut: '䷷', icon: <span className="text-base leading-none">䷷</span>, action: () => insertSymbol('䷷') },
+    { id: 'hex-xun2', label: '巽', desc: '第五十七卦', shortcut: '䷸', icon: <span className="text-base leading-none">䷸</span>, action: () => insertSymbol('䷸') },
+    { id: 'hex-dui2', label: '兑', desc: '第五十八卦', shortcut: '䷹', icon: <span className="text-base leading-none">䷹</span>, action: () => insertSymbol('䷹') },
+    { id: 'hex-huan', label: '涣', desc: '第五十九卦', shortcut: '䷺', icon: <span className="text-base leading-none">䷺</span>, action: () => insertSymbol('䷺') },
+    { id: 'hex-jie2', label: '节', desc: '第六十卦', shortcut: '䷻', icon: <span className="text-base leading-none">䷻</span>, action: () => insertSymbol('䷻') },
+    { id: 'hex-zhongfu', label: '中孚', desc: '第六十一卦', shortcut: '䷼', icon: <span className="text-base leading-none">䷼</span>, action: () => insertSymbol('䷼') },
+    { id: 'hex-xiaoguo', label: '小过', desc: '第六十二卦', shortcut: '䷽', icon: <span className="text-base leading-none">䷽</span>, action: () => insertSymbol('䷽') },
+    { id: 'hex-jiji', label: '既济', desc: '第六十三卦', shortcut: '䷾', icon: <span className="text-base leading-none">䷾</span>, action: () => insertSymbol('䷾') },
+    { id: 'hex-weiji', label: '未济', desc: '第六十四卦', shortcut: '䷿', icon: <span className="text-base leading-none">䷿</span>, action: () => insertSymbol('䷿') },
+  ];
+
+  const yijingGroups: YijingGroup[] = [
+    { id: 'yao', title: '阴阳爻', items: yaoSlashItems },
+    { id: 'bagua', title: '八卦', items: baguaSlashItems },
+    { id: 'hexagrams', title: '六十四卦', items: hexagramSlashItems },
+  ];
+
+  const yijingSlashItems = yijingGroups.flatMap((group) => group.items);
+
+  const slashItems: SlashItem[] = [
     { id: 'h1', label: '标题 1', desc: '大标题', shortcut: '#', icon: <Heading1 className="w-4 h-4" />,
       action: () => editor?.chain().focus().toggleHeading({ level: 1 }).run() },
     { id: 'h2', label: '标题 2', desc: '中标题', shortcut: '##', icon: <Heading2 className="w-4 h-4" />,
@@ -680,6 +913,12 @@ export default function Editor() {
       action: () => editor?.chain().focus().toggleBlockquote().run() },
     { id: 'code', label: '代码块', desc: '代码片段', shortcut: '```', icon: <FileCode2 className="w-4 h-4" />,
       action: () => editor?.chain().focus().toggleCodeBlock().run() },
+    { id: 'mermaid', label: 'Mermaid 图', desc: '流程图、时序图等', shortcut: '```mermaid', icon: <FileCode2 className="w-4 h-4" />,
+      action: () => editor?.chain().focus().insertContent({
+        type: 'codeBlock',
+        attrs: { language: 'mermaid' },
+        content: [{ type: 'text', text: 'graph TD\n  A[开始] --> B[完成]' }],
+      }).run() },
     { id: 'hr', label: '分割线', desc: '水平分隔线', shortcut: '---', icon: <Minus className="w-4 h-4" />,
       action: () => editor?.chain().focus().setHorizontalRule().run() },
     { id: 'image', label: '图片', desc: '上传图片', shortcut: '', icon: <ImageIcon className="w-4 h-4" />,
@@ -695,26 +934,58 @@ export default function Editor() {
       action: () => { setMathDialog({ type: 'block' }); setMathFormula(''); }},
     { id: 'math-inline', label: '行内公式', desc: 'LaTeX 行内公式', shortcut: '$', icon: <span className="text-sm font-bold">∑</span>,
       action: () => { setMathDialog({ type: 'inline' }); setMathFormula(''); }},
-    ...yijingSlashItems,
+    {
+      id: 'yijing-symbols',
+      label: '易经符号',
+      desc: '阴爻、阳爻与八卦',
+      icon: <span className="text-sm font-semibold leading-none">易</span>,
+      children: yijingSlashItems,
+    },
   ];
 
   const filteredSlashItems = slashItems.filter(item =>
     slashFilter === '' ||
     item.label.toLowerCase().includes(slashFilter.toLowerCase()) ||
     item.id.toLowerCase().includes(slashFilter.toLowerCase()) ||
-    item.desc.toLowerCase().includes(slashFilter.toLowerCase())
+    item.desc.toLowerCase().includes(slashFilter.toLowerCase()) ||
+    item.children?.some((child) =>
+      child.label.toLowerCase().includes(slashFilter.toLowerCase()) ||
+      child.id.toLowerCase().includes(slashFilter.toLowerCase()) ||
+      child.desc.toLowerCase().includes(slashFilter.toLowerCase())
+    )
   );
 
+  const activeSlashItem = filteredSlashItems[Math.min(slashIndex, filteredSlashItems.length - 1)];
+  const showYijingPanel =
+    slashSubmenuId === 'yijing-symbols' ||
+    (activeSlashItem?.id === 'yijing-symbols' && !!activeSlashItem.children?.length);
+  const normalizedSlashFilter = slashFilter.trim().toLowerCase();
+  const visibleYijingGroups = yijingGroups.map((group) => ({
+    ...group,
+    items: normalizedSlashFilter
+      ? group.items.filter((item) =>
+          item.label.toLowerCase().includes(normalizedSlashFilter) ||
+          item.id.toLowerCase().includes(normalizedSlashFilter) ||
+          item.desc.toLowerCase().includes(normalizedSlashFilter)
+        )
+      : group.items,
+  }));
+
   // Execute slash command — delete the /query text, then run the action
-  const executeSlashCommand = useCallback((item: typeof slashItems[0]) => {
+  const executeSlashCommand = useCallback((item: SlashItem) => {
     if (!editor) return;
+    if (item.children?.length) {
+      setSlashSubmenuId(item.id);
+      return;
+    }
     setSlashOpen(false);
+    setSlashSubmenuId(null);
     // Delete the slash and any filter text
     const { from } = editor.state.selection;
     editor.chain().focus()
       .deleteRange({ from: slashFromPos.current, to: from })
       .run();
-    item.action();
+    item.action?.();
   }, [editor, slashFromPos]);
 
   // Listen for slash-execute custom event (from Enter keypress)
@@ -741,10 +1012,16 @@ export default function Editor() {
       setMathDialog(null);
       return;
     }
+    const formula = normalizeMathFormula(mathFormula, mathDialog.type);
+    if (!formula) {
+      setMathDialog(null);
+      setMathFormula('');
+      return;
+    }
     if (mathDialog.type === 'block') {
-      (editor.commands as any).insertMathBlock({ formula: mathFormula.trim() });
+      (editor.commands as any).insertMathBlock({ formula });
     } else {
-      (editor.commands as any).insertMathInline({ formula: mathFormula.trim() });
+      (editor.commands as any).insertMathInline({ formula });
     }
     setMathDialog(null);
     setMathFormula('');
@@ -760,6 +1037,19 @@ export default function Editor() {
       if (file) handleImageUpload(file);
     };
     input.click();
+  };
+
+  const copyActiveCodeBlock = async () => {
+    if (!editor) return;
+    const { $from } = editor.state.selection;
+
+    for (let depth = $from.depth; depth >= 0; depth--) {
+      const node = $from.node(depth);
+      if (node.type.name === 'codeBlock') {
+        await navigator.clipboard?.writeText(node.textContent || '');
+        return;
+      }
+    }
   };
 
   if (!editor) return null;
@@ -915,6 +1205,54 @@ export default function Editor() {
         </div>
       </BubbleMenu>
 
+      <BubbleMenu
+        editor={editor}
+        shouldShow={({ editor }) => editor.isActive('codeBlock')}
+        tippyOptions={{ duration: 150, placement: 'bottom-start' }}
+        className="flex items-center gap-1 rounded-xl border border-notion-border bg-white/95 px-2 py-1 shadow-xl backdrop-blur"
+      >
+        <select
+          value={editor.getAttributes('codeBlock').language || ''}
+          onChange={(e) => {
+            editor.chain().focus().updateAttributes('codeBlock', {
+              language: e.target.value || null,
+            }).run();
+          }}
+          className="h-8 rounded-lg border border-notion-border bg-notion-bg px-2 text-xs text-notion-text outline-none transition-colors hover:bg-notion-bg-hover focus:border-notion-accent"
+          title="代码语言"
+        >
+          {CODE_LANGUAGES.map((lang) => (
+            <option key={lang.value || 'plain'} value={lang.value}>
+              {lang.label}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={() => {
+            editor.chain().focus().updateAttributes('codeBlock', {
+              language: 'mermaid',
+            }).run();
+          }}
+          className={`h-8 rounded-lg px-2 text-xs font-medium transition-colors ${
+            (editor.getAttributes('codeBlock').language || '').toLowerCase() === 'mermaid'
+              ? 'bg-notion-accent/10 text-notion-accent'
+              : 'text-notion-text-secondary hover:bg-notion-bg-hover hover:text-notion-text'
+          }`}
+          title="切换为 Mermaid 图表"
+        >
+          Mermaid
+        </button>
+        <button
+          type="button"
+          onClick={copyActiveCodeBlock}
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-notion-text-secondary transition-colors hover:bg-notion-bg-hover hover:text-notion-text"
+          title="复制代码"
+        >
+          <Copy className="h-4 w-4" />
+        </button>
+      </BubbleMenu>
+
       {/* Main editor area */}
       <main className="max-w-3xl mx-auto px-6 py-10">
         {/* Frontmatter: Slug (new only) */}
@@ -1025,6 +1363,16 @@ export default function Editor() {
           <ToolBtn onClick={() => editor.chain().focus().toggleCodeBlock().run()} active={editor.isActive('codeBlock')} title="代码块">
             <Code className="w-4 h-4" />
           </ToolBtn>
+          <ToolBtn
+            onClick={() => editor.chain().focus().insertContent({
+              type: 'codeBlock',
+              attrs: { language: 'mermaid' },
+              content: [{ type: 'text', text: 'graph TD\n  A[开始] --> B[完成]' }],
+            }).run()}
+            title="Mermaid 图表"
+          >
+            <FileCode2 className="w-4 h-4" />
+          </ToolBtn>
           <ToolBtn onClick={() => editor.chain().focus().setHorizontalRule().run()} title="分割线">
             <Minus className="w-4 h-4" />
           </ToolBtn>
@@ -1066,38 +1414,93 @@ export default function Editor() {
           {/* Slash command menu */}
           {slashOpen && filteredSlashItems.length > 0 && slashPos.current && (
             <div
-              className="absolute z-50 bg-white rounded-xl shadow-2xl border border-notion-border py-2 w-72 max-h-80 overflow-y-auto"
+              className="absolute z-50 flex items-start gap-2"
               style={{ top: slashPos.current.top, left: slashPos.current.left }}
             >
-              <div className="px-3 py-1.5 text-[10px] text-notion-text-secondary uppercase tracking-wider">
-                基础块
-              </div>
-              {filteredSlashItems.map((item, idx) => (
-                <button
-                  key={item.id}
-                  onClick={() => executeSlashCommand(item)}
-                  onMouseEnter={() => setSlashIndex(idx)}
-                  className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
-                    idx === Math.min(slashIndex, filteredSlashItems.length - 1)
-                      ? 'bg-notion-bg-hover'
-                      : 'hover:bg-notion-bg-hover/50'
-                  }`}
-                >
-                  <span className="w-8 h-8 rounded-md border border-notion-border/60 flex items-center justify-center bg-white text-notion-text-secondary shrink-0">
-                    {item.icon}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-notion-text font-medium">{item.label}</div>
-                    <div className="text-[11px] text-notion-text-secondary">{item.desc}</div>
+              <div className="bg-white rounded-xl shadow-2xl border border-notion-border py-2 w-72 max-h-80 overflow-y-auto">
+                <div className="px-3 py-1.5 text-[10px] text-notion-text-secondary uppercase tracking-wider">
+                  基础块
+                </div>
+                {filteredSlashItems.map((item, idx) => {
+                  const isActive = idx === Math.min(slashIndex, filteredSlashItems.length - 1);
+                  const isExpanded = slashSubmenuId === item.id || (isActive && !!item.children?.length);
+
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => executeSlashCommand(item)}
+                      onMouseEnter={() => {
+                        setSlashIndex(idx);
+                        setSlashSubmenuId(item.children?.length ? item.id : null);
+                      }}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
+                        isActive
+                          ? 'bg-notion-bg-hover'
+                          : 'hover:bg-notion-bg-hover/50'
+                      }`}
+                    >
+                      <span className="w-8 h-8 rounded-md border border-notion-border/60 flex items-center justify-center bg-white text-notion-text-secondary shrink-0">
+                        {item.icon}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm text-notion-text font-medium">{item.label}</div>
+                        <div className="text-[11px] text-notion-text-secondary">{item.desc}</div>
+                      </div>
+                      {item.children?.length ? (
+                        <ChevronRight className={`w-4 h-4 shrink-0 ${isExpanded ? 'text-notion-text' : 'text-notion-text-placeholder'}`} />
+                      ) : item.shortcut ? (
+                        <span className="text-[11px] text-notion-text-placeholder font-mono">{item.shortcut}</span>
+                      ) : null}
+                    </button>
+                  );
+                })}
+                {filteredSlashItems.length === 0 && (
+                  <div className="px-3 py-4 text-sm text-notion-text-secondary text-center">
+                    没有匹配的命令
                   </div>
-                  {item.shortcut && (
-                    <span className="text-[11px] text-notion-text-placeholder font-mono">{item.shortcut}</span>
-                  )}
-                </button>
-              ))}
-              {filteredSlashItems.length === 0 && (
-                <div className="px-3 py-4 text-sm text-notion-text-secondary text-center">
-                  没有匹配的命令
+                )}
+              </div>
+
+              {showYijingPanel && (
+                <div className="bg-white rounded-xl shadow-2xl border border-notion-border p-3 w-[860px] max-w-[calc(100vw-6rem)]">
+                  <div className="px-1 pb-2 text-[10px] text-notion-text-secondary uppercase tracking-wider">
+                    易经符号
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    {visibleYijingGroups.map((group) => (
+                      <div key={group.id} className="min-w-0 rounded-lg border border-notion-border/70 overflow-hidden">
+                        <div className="px-3 py-2 text-xs font-semibold text-notion-text bg-notion-bg-hover/60 border-b border-notion-border">
+                          {group.title}
+                        </div>
+                        <div className={`overflow-y-auto ${group.id === 'hexagrams' ? 'max-h-80' : 'max-h-64'}`}>
+                          {group.items.length > 0 ? (
+                            group.items.map((item) => (
+                              <button
+                                key={item.id}
+                                onClick={() => executeSlashCommand(item)}
+                                className="w-full flex items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-notion-bg-hover/50"
+                              >
+                                <span className="w-8 h-8 rounded-md border border-notion-border/60 flex items-center justify-center bg-white text-notion-text-secondary shrink-0">
+                                  {item.icon}
+                                </span>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm text-notion-text font-medium">{item.label}</div>
+                                  <div className="text-[11px] text-notion-text-secondary">{item.desc}</div>
+                                </div>
+                                {item.shortcut && (
+                                  <span className="text-[11px] text-notion-text-placeholder font-mono">{item.shortcut}</span>
+                                )}
+                              </button>
+                            ))
+                          ) : (
+                            <div className="px-3 py-6 text-center text-xs text-notion-text-secondary">
+                              没有匹配项
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
