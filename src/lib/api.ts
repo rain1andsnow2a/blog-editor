@@ -1,4 +1,4 @@
-import type { BlogSettings, GitStatus, HomeImages, PostDetail, PostMeta } from '../desktop';
+import type { BlogSettings, GitStatus, PostDetail, PostMeta } from '../desktop';
 
 const BASE = '/api';
 
@@ -97,30 +97,6 @@ export async function uploadImage(file: File): Promise<{ url: string }> {
   return res.json();
 }
 
-export async function fetchHomeImages(): Promise<HomeImages> {
-  if (hasDesktopApi()) {
-    return window.blogApi.getHomeImages();
-  }
-
-  const res = await fetch(`${BASE}/home-images`);
-  if (!res.ok) throw new Error('Failed to fetch home images');
-  return res.json();
-}
-
-export async function updateHomeImages(cardImages: string[]): Promise<{ success: boolean } & HomeImages> {
-  if (hasDesktopApi()) {
-    return window.blogApi.updateHomeImages({ cardImages });
-  }
-
-  const res = await fetch(`${BASE}/home-images`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cardImages }),
-  });
-  if (!res.ok) throw new Error('Failed to update home images');
-  return res.json();
-}
-
 export async function syncToGitHub(
   message?: string
 ): Promise<{ success: boolean; message: string; details?: string }> {
@@ -174,4 +150,4 @@ export async function chooseBlogRoot(): Promise<string | null> {
   throw new Error('Settings are only available in the desktop app');
 }
 
-export type { BlogSettings, GitStatus, HomeImages, PostDetail, PostMeta };
+export type { BlogSettings, GitStatus, PostDetail, PostMeta };

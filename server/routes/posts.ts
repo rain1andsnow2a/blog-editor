@@ -31,6 +31,7 @@ router.get('/', async (_req, res) => {
           filename,
           title: data.title || filename,
           description: data.description || '',
+          cover: data.cover || '',
           pubDate: data.pubDate || stat.mtime.toISOString().split('T')[0],
           category: normalizeCategory(data.category),
           tags: data.tags || [],
@@ -77,6 +78,7 @@ router.get('/:slug', async (req, res) => {
       frontmatter: {
         title: data.title || '',
         description: data.description || '',
+        cover: data.cover || '',
         pubDate: data.pubDate ? new Date(data.pubDate).toISOString().split('T')[0] : '',
         category: normalizeCategory(data.category),
         tags: data.tags || [],
@@ -109,6 +111,7 @@ router.post('/', async (req, res) => {
     const fileContent = matter.stringify(content || '', {
       title: frontmatter.title,
       description: frontmatter.description || '',
+      ...(frontmatter.cover ? { cover: frontmatter.cover } : {}),
       pubDate: frontmatter.pubDate || new Date().toISOString().split('T')[0],
       category: normalizeCategory(frontmatter.category),
       tags: frontmatter.tags || [],
@@ -139,6 +142,7 @@ router.put('/:slug', async (req, res) => {
     const fm: Record<string, any> = {
       title: frontmatter.title,
       description: frontmatter.description || '',
+      ...(frontmatter.cover ? { cover: frontmatter.cover } : {}),
       pubDate: frontmatter.pubDate,
       category: normalizeCategory(frontmatter.category),
       tags: frontmatter.tags || [],

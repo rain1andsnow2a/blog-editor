@@ -254,6 +254,7 @@ export default function Editor() {
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [cover, setCover] = useState('');
   const [pubDate, setPubDate] = useState(new Date().toISOString().split('T')[0]);
   const [category, setCategory] = useState('未分类');
   const [tags, setTags] = useState<string[]>([]);
@@ -436,6 +437,29 @@ export default function Editor() {
     }
   }, [editor]);
 
+  const handleCoverUpload = async (file: File) => {
+    try {
+      const { url } = await uploadImage(file);
+      setCover(url);
+      setSaveMsg('封面已上传，保存文章后生效');
+      setTimeout(() => setSaveMsg(''), 3000);
+    } catch (err: any) {
+      setSaveMsg('封面上传失败: ' + (err.message || String(err)));
+      setTimeout(() => setSaveMsg(''), 3000);
+    }
+  };
+
+  const openCoverPicker = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = (e: any) => {
+      const file = e.target.files?.[0];
+      if (file) handleCoverUpload(file);
+    };
+    input.click();
+  };
+
   // Load existing post
   useEffect(() => {
     if (slug && editor) {
@@ -444,6 +468,7 @@ export default function Editor() {
         .then((post) => {
           setTitle(post.frontmatter.title);
           setDescription(post.frontmatter.description);
+          setCover(post.frontmatter.cover || '');
           setPubDate(post.frontmatter.pubDate);
           setCategory(post.frontmatter.category || '未分类');
           setTags(post.frontmatter.tags);
@@ -710,6 +735,7 @@ export default function Editor() {
       const frontmatter = {
         title,
         description,
+        cover,
         pubDate,
         category: category.trim() || '未分类',
         tags,
@@ -758,12 +784,12 @@ export default function Editor() {
         try {
           const content = htmlToMarkdown();
           // Skip save if content hasn't changed
-          const snapshot = JSON.stringify({ title, description, pubDate, category, tags, content });
+          const snapshot = JSON.stringify({ title, description, cover, pubDate, category, tags, content });
           if (snapshot === lastSavedRef.current) return;
           lastSavedRef.current = snapshot;
 
           const frontmatter = {
-            title, description, pubDate, category: category.trim() || '未分类', tags,
+            title, description, cover, pubDate, category: category.trim() || '未分类', tags,
             updatedDate: new Date().toISOString().split('T')[0],
           };
           await updatePost(slug, { frontmatter, content });
@@ -780,7 +806,7 @@ export default function Editor() {
       editor.off('update', onUpdate);
       if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     };
-  }, [editor, slug, isNew, title, description, pubDate, category, tags]);
+  }, [editor, slug, isNew, title, description, cover, pubDate, category, tags]);
 
   const addTag = () => {
     const t = tagInput.trim();
@@ -1288,6 +1314,49 @@ export default function Editor() {
           placeholder="添加描述..."
           className="w-full text-base text-notion-text-secondary placeholder:text-notion-text-placeholder focus:outline-none mb-4"
         />
+
+        {/* Cover */}
+        <div className="mb-6 rounded-xl border border-notion-border bg-notion-bg-hover/45 p-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-50 text-orange-600">
+                <ImageIcon className="w-4 h-4" />
+              </span>
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-notion-text">文章封面</div>
+                <div className="truncate text-xs text-notion-text-secondary">
+                  {cover || '未设置时，首页和文章列表会使用默认封面图'}
+                </div>
+              </div>
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={openCoverPicker}
+                className="inline-flex items-center gap-1.5 rounded-md border border-notion-border bg-white px-3 py-1.5 text-sm text-notion-text transition-colors hover:bg-white/70"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                上传封面
+              </button>
+              {cover && (
+                <button
+                  type="button"
+                  onClick={() => setCover('')}
+                  className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm text-notion-text-secondary transition-colors hover:bg-white hover:text-red-500"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  清空
+                </button>
+              )}
+            </div>
+          </div>
+
+          {cover && (
+            <div className="mt-3 overflow-hidden rounded-lg border border-notion-border bg-white">
+              <img src={cover} alt="文章封面预览" className="h-40 w-full object-cover" />
+            </div>
+          )}
+        </div>
 
         {/* Meta: date, category & tags */}
         <div className="flex flex-wrap items-center gap-4 mb-8 pb-6 border-b border-notion-border text-sm">

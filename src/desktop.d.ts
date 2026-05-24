@@ -3,6 +3,7 @@ export interface PostMeta {
   filename: string;
   title: string;
   description: string;
+  cover?: string;
   pubDate: string;
   category: string;
   tags: string[];
@@ -15,6 +16,7 @@ export interface PostDetail {
   frontmatter: {
     title: string;
     description: string;
+    cover?: string;
     pubDate: string;
     category: string;
     tags: string[];
@@ -46,11 +48,6 @@ export interface BlogSettings {
   branch: string;
 }
 
-export interface HomeImages {
-  cardImages: string[];
-  defaults: string[];
-}
-
 export interface BlogApi {
   listPosts: () => Promise<PostMeta[]>;
   getPost: (slug: string) => Promise<PostDetail>;
@@ -69,8 +66,6 @@ export interface BlogApi {
     type: string;
     bytes: number[];
   }) => Promise<{ url: string; filename: string }>;
-  getHomeImages: () => Promise<HomeImages>;
-  updateHomeImages: (payload: { cardImages: string[] }) => Promise<{ success: boolean } & HomeImages>;
   getGitStatus: () => Promise<GitStatus>;
   syncToGitHub: (message?: string) => Promise<{
     success: boolean;

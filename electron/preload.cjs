@@ -7,8 +7,6 @@ contextBridge.exposeInMainWorld('blogApi', {
   updatePost: (slug, payload) => ipcRenderer.invoke('posts:update', slug, payload),
   deletePost: (slug) => ipcRenderer.invoke('posts:delete', slug),
   uploadImage: (payload) => ipcRenderer.invoke('images:upload', payload),
-  getHomeImages: () => ipcRenderer.invoke('home-images:get'),
-  updateHomeImages: (payload) => ipcRenderer.invoke('home-images:update', payload),
   getGitStatus: () => ipcRenderer.invoke('git:status'),
   syncToGitHub: (message) => ipcRenderer.invoke('git:sync', message),
   getAppInfo: () => ipcRenderer.invoke('app:info'),

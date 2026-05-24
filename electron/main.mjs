@@ -134,40 +134,6 @@ function getUploadDir() {
   return path.join(getBlogRoot(), 'public', 'uploads');
 }
 
-function getHomeImagesPath() {
-  return path.join(getBlogRoot(), 'src', 'data', 'homeImages.json');
-}
-
-const DEFAULT_CARD_IMAGES = [
-  '/article-cover-knowledge-01.png',
-  '/article-cover-knowledge-02.png',
-  '/article-cover-knowledge-03.png',
-  '/article-cover-knowledge-04.png',
-];
-
-function normalizeImages(images) {
-  if (!Array.isArray(images)) return [];
-  return images
-    .map((image) => String(image || '').trim())
-    .filter(Boolean);
-}
-
-async function readHomeImages() {
-  try {
-    const raw = await fs.readFile(getHomeImagesPath(), 'utf-8');
-    const parsed = JSON.parse(raw);
-    return {
-      cardImages: normalizeImages(parsed.cardImages),
-      defaults: DEFAULT_CARD_IMAGES,
-    };
-  } catch {
-    return {
-      cardImages: [],
-      defaults: DEFAULT_CARD_IMAGES,
-    };
-  }
-}
-
 async function readConfig() {
   try {
     const raw = await fs.readFile(CONFIG_PATH, 'utf-8');
@@ -273,6 +239,7 @@ ipcMain.handle('posts:list', async () => {
         filename,
         title: data.title || filename,
         description: data.description || '',
+        cover: data.cover || '',
         pubDate: data.pubDate || stat.mtime.toISOString().split('T')[0],
         category: normalizeCategory(data.category),
         tags: data.tags || [],
@@ -300,6 +267,7 @@ ipcMain.handle('posts:get', async (_event, slug) => {
     frontmatter: {
       title: data.title || '',
       description: data.description || '',
+      cover: data.cover || '',
       pubDate: data.pubDate ? new Date(data.pubDate).toISOString().split('T')[0] : '',
       category: normalizeCategory(data.category),
       tags: data.tags || [],
@@ -335,6 +303,7 @@ ipcMain.handle('posts:create', async (_event, payload) => {
   const fileContent = matter.stringify(content, {
     title: frontmatter.title,
     description: frontmatter.description || '',
+    ...(frontmatter.cover ? { cover: frontmatter.cover } : {}),
     pubDate: frontmatter.pubDate || new Date().toISOString().split('T')[0],
     category: normalizeCategory(frontmatter.category),
     tags: frontmatter.tags || [],
@@ -355,6 +324,7 @@ ipcMain.handle('posts:update', async (_event, slug, payload) => {
   const fm = {
     title: frontmatter.title || '',
     description: frontmatter.description || '',
+    ...(frontmatter.cover ? { cover: frontmatter.cover } : {}),
     pubDate: frontmatter.pubDate || '',
     category: normalizeCategory(frontmatter.category),
     tags: frontmatter.tags || [],
@@ -405,28 +375,6 @@ ipcMain.handle('images:upload', async (_event, payload) => {
   return {
     url: `/uploads/${targetName}`,
     filename: targetName,
-  };
-});
-
-ipcMain.handle('home-images:get', async () => {
-  await ensureDirectories();
-  return readHomeImages();
-});
-
-ipcMain.handle('home-images:update', async (_event, payload) => {
-  await ensureDirectories();
-  const nextImages = normalizeImages(payload?.cardImages);
-  const targetPath = getHomeImagesPath();
-  await fs.mkdir(path.dirname(targetPath), { recursive: true });
-  await fs.writeFile(
-    targetPath,
-    JSON.stringify({ cardImages: nextImages }, null, 2) + '\n',
-    'utf-8'
-  );
-  return {
-    success: true,
-    cardImages: nextImages,
-    defaults: DEFAULT_CARD_IMAGES,
   };
 });
 

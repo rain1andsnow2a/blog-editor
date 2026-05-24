@@ -8,15 +8,11 @@ import {
   getSettings,
   updateSettings,
   chooseBlogRoot,
-  uploadImage,
-  fetchHomeImages,
-  updateHomeImages,
   type PostMeta,
   type GitStatus,
   type BlogSettings,
-  type HomeImages,
 } from '../lib/api';
-import { Plus, Trash2, Edit3, GitBranch, Upload, FileText, Tag, Clock, Settings, FolderOpen, X, FolderTree, Image as ImageIcon, Save } from 'lucide-react';
+import { Plus, Trash2, Edit3, GitBranch, Upload, FileText, Tag, Clock, Settings, FolderOpen, X, FolderTree } from 'lucide-react';
 
 export default function PostList() {
   const [posts, setPosts] = useState<PostMeta[]>([]);
@@ -24,9 +20,6 @@ export default function PostList() {
   const [settings, setSettings] = useState<BlogSettings | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [settingsDraft, setSettingsDraft] = useState<BlogSettings | null>(null);
-  const [homeImages, setHomeImages] = useState<HomeImages>({ cardImages: [], defaults: [] });
-  const [savingHomeImages, setSavingHomeImages] = useState(false);
-  const [uploadingHomeImage, setUploadingHomeImage] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
@@ -47,14 +40,9 @@ export default function PostList() {
   const load = async () => {
     setLoading(true);
     try {
-      const [p, g, h] = await Promise.all([
-        fetchPosts(),
-        getGitStatus(),
-        fetchHomeImages().catch(() => ({ cardImages: [], defaults: [] })),
-      ]);
+      const [p, g] = await Promise.all([fetchPosts(), getGitStatus()]);
       setPosts(p);
       setGitStatus(g);
-      setHomeImages(h);
       try {
         const s = await getSettings();
         setSettings(s);
@@ -134,50 +122,6 @@ export default function PostList() {
       setSyncMsg('保存设置失败: ' + (err.message || String(err)));
     } finally {
       setSavingSettings(false);
-      setTimeout(() => setSyncMsg(''), 4000);
-    }
-  };
-
-  const handleUploadHomeImages = async (files: FileList | null) => {
-    if (!files?.length) return;
-    setUploadingHomeImage(true);
-    try {
-      const uploaded: string[] = [];
-      for (const file of Array.from(files)) {
-        const result = await uploadImage(file);
-        uploaded.push(result.url);
-      }
-      setHomeImages((prev) => ({
-        ...prev,
-        cardImages: [...prev.cardImages, ...uploaded],
-      }));
-      setSyncMsg('首页图片已加入，记得保存并同步到 GitHub');
-    } catch (err: any) {
-      setSyncMsg('上传首页图片失败: ' + (err.message || String(err)));
-    } finally {
-      setUploadingHomeImage(false);
-      setTimeout(() => setSyncMsg(''), 4000);
-    }
-  };
-
-  const handleRemoveHomeImage = (index: number) => {
-    setHomeImages((prev) => ({
-      ...prev,
-      cardImages: prev.cardImages.filter((_, itemIndex) => itemIndex !== index),
-    }));
-  };
-
-  const handleSaveHomeImages = async () => {
-    setSavingHomeImages(true);
-    try {
-      const updated = await updateHomeImages(homeImages.cardImages);
-      setHomeImages(updated);
-      setSyncMsg('首页图片配置已保存');
-      await load();
-    } catch (err: any) {
-      setSyncMsg('保存首页图片失败: ' + (err.message || String(err)));
-    } finally {
-      setSavingHomeImages(false);
       setTimeout(() => setSyncMsg(''), 4000);
     }
   };
@@ -331,74 +275,6 @@ export default function PostList() {
 
       {/* Post list */}
       <main className="max-w-4xl mx-auto px-6 py-8">
-        <section className="mb-6 rounded-2xl border border-notion-border bg-white shadow-sm overflow-hidden">
-          <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
-                <ImageIcon className="w-4 h-4" />
-              </span>
-              <div>
-                <h2 className="text-sm font-semibold text-notion-text">首页图片</h2>
-                <p className="mt-1 text-xs text-notion-text-secondary">
-                  上传后会替换首页文章卡片轮播用图；不上传或清空时，网站继续使用默认图片。
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                id="home-image-upload"
-                type="file"
-                accept="image/*"
-                multiple
-                className="hidden"
-                onChange={(event) => {
-                  handleUploadHomeImages(event.target.files);
-                  event.currentTarget.value = '';
-                }}
-              />
-              <label
-                htmlFor="home-image-upload"
-                className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-notion-border px-3 py-1.5 text-sm text-notion-text transition-colors hover:bg-notion-bg-hover"
-              >
-                <Upload className="w-3.5 h-3.5" />
-                {uploadingHomeImage ? '上传中...' : '上传图片'}
-              </label>
-              <button
-                onClick={handleSaveHomeImages}
-                disabled={savingHomeImages}
-                className="inline-flex items-center gap-1.5 rounded-md bg-notion-text px-3 py-1.5 text-sm text-white transition-colors hover:bg-neutral-700 disabled:opacity-50"
-              >
-                <Save className="w-3.5 h-3.5" />
-                {savingHomeImages ? '保存中...' : '保存配置'}
-              </button>
-            </div>
-          </div>
-
-          <div className="border-t border-notion-border px-4 py-4">
-            {homeImages.cardImages.length > 0 ? (
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                {homeImages.cardImages.map((image, index) => (
-                  <div key={`${image}-${index}`} className="group relative overflow-hidden rounded-xl border border-notion-border bg-notion-bg-hover">
-                    <img src={image} alt={`首页图片 ${index + 1}`} className="h-24 w-full object-cover" />
-                    <button
-                      onClick={() => handleRemoveHomeImage(index)}
-                      className="absolute right-2 top-2 rounded-full bg-white/90 p-1 text-notion-text-secondary opacity-0 shadow-sm transition-opacity hover:text-red-500 group-hover:opacity-100"
-                      title="移除"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                    <div className="truncate px-2 py-1.5 text-[11px] text-notion-text-secondary">{image}</div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-xl border border-dashed border-notion-border bg-notion-bg-hover/60 px-4 py-5 text-sm text-notion-text-secondary">
-                当前未设置自定义首页图片，构建时会自动使用博客内置默认图。
-              </div>
-            )}
-          </div>
-        </section>
-
         {loading ? (
           <div className="text-center py-20 text-notion-text-placeholder">加载中...</div>
         ) : posts.length === 0 ? (
