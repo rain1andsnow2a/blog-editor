@@ -4,21 +4,34 @@ export default {
   theme: {
     extend: {
       colors: {
+        // 方案「和纸稿纸」色板：暖纸底色 + 单一墨色层级 + 琥珀/朱红点缀
+        paper: {
+          DEFAULT: '#faf6ee',
+          deep: '#f3ede0',
+        },
+        ink: {
+          DEFAULT: '#33302a',
+          2: '#6b655a',
+          3: '#a39a89',
+        },
+        hairline: '#e3dac7',
+        seal: '#a8352a',
+        // 兼容旧类名的语义别名（与和纸稿纸同色系）
         notion: {
-          bg: '#ffffff',
-          'bg-hover': '#f7f7f5',
-          'bg-sidebar': '#f7f7f5',
-          border: '#e8e8e5',
-          text: '#37352f',
-          'text-secondary': '#787774',
-          'text-placeholder': '#b4b4b0',
-          accent: '#2383e2',
-          'accent-hover': '#1b6ec2',
+          bg: '#faf6ee',
+          'bg-hover': '#f3ede0',
+          'bg-sidebar': '#f7f2e9',
+          border: '#e3dac7',
+          text: '#33302a',
+          'text-secondary': '#6b655a',
+          'text-placeholder': '#a39a89',
+          accent: '#b07830',
+          'accent-hover': '#8f5f1f',
         },
       },
       fontFamily: {
-        sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Noto Sans SC', 'sans-serif'],
-        mono: ['SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
+        sans: ['"LXGW WenKai Screen"', 'Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Noto Sans SC', 'serif'],
+        mono: ['JetBrains Mono', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
       },
     },
   },

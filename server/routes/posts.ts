@@ -1,11 +1,13 @@
 import { Router } from 'express';
 import fs from 'fs/promises';
 import path from 'path';
+import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import matter from 'gray-matter';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const BLOG_CONTENT_DIR = path.resolve(__dirname, '../../../blog/src/content/blog');
+const BLOG_ROOT = path.resolve(__dirname, '../../../blog');
+const BLOG_CONTENT_DIR = path.join(BLOG_ROOT, 'src/content/blog');
 
 const router = Router();
 
@@ -26,6 +28,16 @@ router.get('/', async (_req, res) => {
         const raw = await fs.readFile(filePath, 'utf-8');
         const { data } = matter(raw);
         const stat = await fs.stat(filePath);
+        const relPath = `src/content/blog/${filename}`;
+        let published = false;
+        try {
+          execSync(`git ls-files --error-unmatch -- ${relPath}`, {
+            cwd: BLOG_ROOT,
+            stdio: 'ignore',
+            timeout: 5000,
+          });
+          published = true;
+        } catch { /* untracked / not a git repo */ }
         return {
           slug: filename.replace(/\.(md|mdx)$/, ''),
           filename,
@@ -36,6 +48,7 @@ router.get('/', async (_req, res) => {
           category: normalizeCategory(data.category),
           tags: data.tags || [],
           updatedDate: data.updatedDate || null,
+          published,
         };
       })
     );

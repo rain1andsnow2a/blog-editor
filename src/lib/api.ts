@@ -1,4 +1,4 @@
-import type { BlogSettings, GitStatus, PostDetail, PostMeta } from '../desktop';
+import type { BlogSettings, DraftMeta, GitStatus, PostDetail, PostMeta, PublishResult, WithdrawResult } from '../desktop';
 
 const BASE = '/api';
 
@@ -150,4 +150,58 @@ export async function chooseBlogRoot(): Promise<string | null> {
   throw new Error('Settings are only available in the desktop app');
 }
 
-export type { BlogSettings, GitStatus, PostDetail, PostMeta };
+export async function publishPost(slug: string): Promise<PublishResult> {
+  if (hasDesktopApi()) {
+    return window.blogApi.publishPost(slug);
+  }
+
+  const res = await fetch(`${BASE}/github/publish/${encodeURIComponent(slug)}`, { method: 'POST' });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.details || data.error || 'Publish failed');
+  return data;
+}
+
+export async function withdrawPost(slug: string): Promise<WithdrawResult> {
+  if (hasDesktopApi()) {
+    return window.blogApi.withdrawPost(slug);
+  }
+
+  const res = await fetch(`${BASE}/github/withdraw/${encodeURIComponent(slug)}`, { method: 'POST' });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.details || data.error || 'Withdraw failed');
+  return data;
+}
+
+export async function fetchDrafts(): Promise<DraftMeta[]> {
+  if (hasDesktopApi()) {
+    return window.blogApi.listDrafts();
+  }
+
+  const res = await fetch(`${BASE}/drafts`);
+  if (!res.ok) throw new Error('Failed to fetch drafts');
+  return res.json();
+}
+
+export async function restoreDraft(slug: string): Promise<PublishResult> {
+  if (hasDesktopApi()) {
+    return window.blogApi.restoreDraft(slug);
+  }
+
+  const res = await fetch(`${BASE}/drafts/${encodeURIComponent(slug)}/restore`, { method: 'POST' });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.details || data.error || 'Restore failed');
+  return data;
+}
+
+export async function deleteDraft(slug: string): Promise<{ success: boolean }> {
+  if (hasDesktopApi()) {
+    return window.blogApi.deleteDraft(slug);
+  }
+
+  const res = await fetch(`${BASE}/drafts/${encodeURIComponent(slug)}`, { method: 'DELETE' });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Delete draft failed');
+  return data;
+}
+
+export type { BlogSettings, DraftMeta, GitStatus, PostDetail, PostMeta };

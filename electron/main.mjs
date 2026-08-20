@@ -122,6 +122,19 @@ async function runGit(args) {
   return `${stdout || ''}${stderr || ''}`.trim();
 }
 
+async function runGitAllowFail(args) {
+  try {
+    return await runGit(args);
+  } catch {
+    return '';
+  }
+}
+
+async function getCurrentBranch() {
+  const branch = await runGitAllowFail(['branch', '--show-current']);
+  return branch.trim() || appConfig.branch || 'main';
+}
+
 function getBlogRoot() {
   return appConfig.blogRoot;
 }
@@ -132,6 +145,85 @@ function getBlogContentDir() {
 
 function getUploadDir() {
   return path.join(getBlogRoot(), 'public', 'uploads');
+}
+
+function getLocalDraftsDir() {
+  // 打包后 APP_ROOT 位于 resources/app.asar 内（文件而非目录），不可写；
+  // 草稿箱必须放在 userData 这种持久可写位置。
+  return path.join(app.getPath('userData'), 'local-drafts');
+}
+
+// 单篇发布：只提交该文章文件 + public/uploads，绝不带走其他未提交改动。
+// 返回 { success, message, details?, noop? }。
+async function publishPostFlow(slug) {
+  const resolved = await resolvePostFile(slug);
+  if (!resolved) {
+    throw new Error('文章不存在');
+  }
+
+  // git pathspec 统一用 POSIX 分隔符
+  const relPath = `src/content/blog/${resolved.filename}`;
+  const paths = [relPath, 'public/uploads/'];
+
+  // 只 stage 指定路径（untracked 图片/新文章必须先 add，pathspec commit 不含未跟踪文件）
+  await runGit(['add', '--', ...paths]);
+  const staged = await runGitAllowFail(['diff', '--cached', '--name-only', '--', ...paths]);
+
+  if (staged.trim()) {
+    // commit -- <pathspec> 只提交匹配路径，其他已暂存的文件不会被带走
+    await runGit(['commit', '-m', `publish: ${resolved.slug}`, '--', ...paths]);
+  } else {
+    // 工作区/索引无变更：若本地没有触达该文件的未推送提交，视为已是最新
+    const ahead = await runGitAllowFail(['rev-list', '@{u}..HEAD', '--oneline', '--', relPath]);
+    if (!ahead.trim()) {
+      return { success: true, message: `「${resolved.slug}」已是最新，无需发布`, noop: true };
+    }
+  }
+
+  const branch = await getCurrentBranch();
+  const pushOutput = await runGit(['push', appConfig.remoteName, branch]);
+  return {
+    success: true,
+    message: `已发布「${resolved.slug}」`,
+    details: pushOutput,
+  };
+}
+
+// 单篇撤回：备份到本地草稿箱 -> git rm -> scoped commit -> push
+async function withdrawPostFlow(slug) {
+  const resolved = await resolvePostFile(slug);
+  if (!resolved) {
+    throw new Error('文章不存在');
+  }
+
+  const draftsDir = getLocalDraftsDir();
+  await fs.mkdir(draftsDir, { recursive: true });
+  const draftFilename = `${resolved.slug}.md`;
+  await fs.copyFile(resolved.filePath, path.join(draftsDir, draftFilename));
+
+  const relPath = `src/content/blog/${resolved.filename}`;
+  const tracked = await runGitAllowFail(['ls-files', '--error-unmatch', '--', relPath]);
+
+  if (tracked.trim()) {
+    await runGit(['rm', '-q', '--', relPath]);
+    await runGit(['commit', '-m', `withdraw: ${resolved.slug}`, '--', relPath]);
+    const branch = await getCurrentBranch();
+    const pushOutput = await runGit(['push', appConfig.remoteName, branch]);
+    return {
+      success: true,
+      message: `已撤回「${resolved.slug}」，备份已存入草稿箱`,
+      details: pushOutput,
+      draft: draftFilename,
+    };
+  }
+
+  // 文件从未被 git 跟踪：本地删除即可，无需 commit/push
+  await fs.unlink(resolved.filePath);
+  return {
+    success: true,
+    message: `「${resolved.slug}」尚未进入版本库，已移入草稿箱`,
+    draft: draftFilename,
+  };
 }
 
 async function readConfig() {
@@ -174,12 +266,24 @@ async function createWindow() {
     minHeight: 720,
     backgroundColor: '#ffffff',
     icon: WINDOW_ICON_PATH,
+    // The renderer owns the title bar so it can share one row with the app menu.
+    frame: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
+
+  win.removeMenu();
+  const syncMaximizedState = () => {
+    if (!win.isDestroyed() && !win.webContents.isDestroyed()) {
+      win.webContents.send('window:maximized-changed', win.isMaximized());
+    }
+  };
+  win.on('maximize', syncMaximizedState);
+  win.on('unmaximize', syncMaximizedState);
+  win.webContents.once('did-finish-load', syncMaximizedState);
 
   win.webContents.session.webRequest.onBeforeRequest(
     { urls: ['http://localhost:5177/uploads/*', 'https://localhost:5177/uploads/*'] },
@@ -195,6 +299,33 @@ async function createWindow() {
     await win.loadURL(RENDERER_URL);
   }
 }
+
+function getWindowFromEvent(event) {
+  return BrowserWindow.fromWebContents(event.sender);
+}
+
+ipcMain.handle('window:minimize', (event) => {
+  getWindowFromEvent(event)?.minimize();
+});
+
+ipcMain.handle('window:toggle-maximize', (event) => {
+  const win = getWindowFromEvent(event);
+  if (!win) return false;
+  if (win.isMaximized()) {
+    win.unmaximize();
+  } else {
+    win.maximize();
+  }
+  return win.isMaximized();
+});
+
+ipcMain.handle('window:close', (event) => {
+  getWindowFromEvent(event)?.close();
+});
+
+ipcMain.handle('window:is-maximized', (event) => {
+  return getWindowFromEvent(event)?.isMaximized() ?? false;
+});
 
 function registerAppProtocol() {
   protocol.handle('app', async (request) => {
@@ -233,6 +364,8 @@ ipcMain.handle('posts:list', async () => {
       const raw = await fs.readFile(filePath, 'utf-8');
       const { data } = matter(raw);
       const stat = await fs.stat(filePath);
+      const relPath = `src/content/blog/${filename}`;
+      const tracked = await runGitAllowFail(['ls-files', '--error-unmatch', '--', relPath]);
 
       return {
         slug: filename.replace(/\.(md|mdx)$/, ''),
@@ -244,6 +377,7 @@ ipcMain.handle('posts:list', async () => {
         category: normalizeCategory(data.category),
         tags: data.tags || [],
         updatedDate: data.updatedDate || null,
+        published: Boolean(tracked.trim()),
       };
     })
   );
@@ -350,6 +484,85 @@ ipcMain.handle('posts:delete', async (_event, slug) => {
   return { success: true };
 });
 
+ipcMain.handle('posts:publish', async (_event, slug) => {
+  return publishPostFlow(slug);
+});
+
+ipcMain.handle('posts:withdraw', async (_event, slug) => {
+  return withdrawPostFlow(slug);
+});
+
+ipcMain.handle('drafts:list', async () => {
+  const draftsDir = getLocalDraftsDir();
+  let files = [];
+  try {
+    files = await fs.readdir(draftsDir);
+  } catch {
+    return [];
+  }
+
+  const mdFiles = files.filter((file) => file.endsWith('.md') || file.endsWith('.mdx'));
+  const drafts = await Promise.all(
+    mdFiles.map(async (filename) => {
+      const filePath = path.join(draftsDir, filename);
+      const raw = await fs.readFile(filePath, 'utf-8');
+      const { data } = matter(raw);
+      const stat = await fs.stat(filePath);
+      return {
+        slug: filename.replace(/\.(md|mdx)$/, ''),
+        filename,
+        title: data.title || filename,
+        pubDate: data.pubDate || stat.mtime.toISOString().split('T')[0],
+      };
+    })
+  );
+
+  drafts.sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime());
+  return drafts;
+});
+
+ipcMain.handle('drafts:restore', async (_event, slug) => {
+  const safeSlug = sanitizeSlug(slug);
+  if (!safeSlug) throw new Error('slug is required');
+  const draftsDir = getLocalDraftsDir();
+  let draftPath = null;
+  let draftFilename = '';
+  for (const ext of ['.md', '.mdx']) {
+    const candidate = path.join(draftsDir, `${safeSlug}${ext}`);
+    if (await pathExists(candidate)) {
+      draftPath = candidate;
+      draftFilename = `${safeSlug}${ext}`;
+      break;
+    }
+  }
+  if (!draftPath) throw new Error('草稿不存在');
+
+  const targetPath = path.join(getBlogContentDir(), draftFilename);
+  if (await pathExists(targetPath)) {
+    throw new Error('博客中已存在同名文章，请先处理冲突');
+  }
+
+  await fs.copyFile(draftPath, targetPath);
+  const result = await publishPostFlow(safeSlug);
+  // 发布成功后才删除本地草稿备份
+  await fs.unlink(draftPath);
+  return { ...result, message: `已重新发布「${safeSlug}」` };
+});
+
+ipcMain.handle('drafts:delete', async (_event, slug) => {
+  const safeSlug = sanitizeSlug(slug);
+  if (!safeSlug) throw new Error('slug is required');
+  const draftsDir = getLocalDraftsDir();
+  for (const ext of ['.md', '.mdx']) {
+    const candidate = path.join(draftsDir, `${safeSlug}${ext}`);
+    if (await pathExists(candidate)) {
+      await fs.unlink(candidate);
+      return { success: true };
+    }
+  }
+  throw new Error('草稿不存在');
+});
+
 ipcMain.handle('images:upload', async (_event, payload) => {
   const filename = String(payload?.name || '');
   const bytes = payload?.bytes;
@@ -379,9 +592,24 @@ ipcMain.handle('images:upload', async (_event, payload) => {
 });
 
 ipcMain.handle('git:status', async () => {
-  const status = await runGit(['status', '--porcelain']);
-  const branch = await runGit(['branch', '--show-current']);
-  const lastCommit = await runGit(['log', '-1', '--format=%h %s']);
+  let status = '';
+  let branch = '';
+  let lastCommit = '';
+  try {
+    status = await runGit(['status', '--porcelain']);
+  } catch {
+    // Ignore: repo may be in a broken state.
+  }
+  try {
+    branch = await runGit(['branch', '--show-current']);
+  } catch {
+    // Ignore: detached or broken HEAD.
+  }
+  try {
+    lastCommit = await runGit(['log', '-1', '--format=%h %s']);
+  } catch {
+    // Ignore: no commits or corrupt refs.
+  }
   let remoteUrl = '';
   try {
     remoteUrl = await runGit(['remote', 'get-url', appConfig.remoteName]);

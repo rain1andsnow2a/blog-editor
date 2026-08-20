@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import postsRouter from './routes/posts.js';
 import uploadRouter from './routes/upload.js';
 import githubRouter from './routes/github.js';
+import draftsRouter from './routes/drafts.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -20,6 +21,7 @@ app.use('/uploads', express.static(path.join(blogRoot, 'public/uploads')));
 app.use('/api/posts', postsRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/github', githubRouter);
+app.use('/api/drafts', draftsRouter);
 
 app.listen(PORT, () => {
   console.log(`\n  ✏️  Blog Editor API running at http://localhost:${PORT}`);

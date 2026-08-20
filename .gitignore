@@ -9,6 +9,9 @@ release/
 *.log
 npm-debug.log*
 
+# 本地草稿箱（撤回文章的本地备份，不进版本库）
+local-drafts/
+
 # env files
 .env
 .env.*

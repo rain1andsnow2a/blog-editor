@@ -77,7 +77,7 @@ export const MathBlock = Node.create({
     return {
       insertMathBlock:
         (attrs?: { formula?: string }) =>
-        ({ commands }) => {
+        ({ commands }: { commands: any }) => {
           return commands.insertContent({
             type: this.name,
             attrs: { formula: attrs?.formula || '' },
@@ -143,7 +143,7 @@ export const MathInline = Node.create({
     return {
       insertMathInline:
         (attrs?: { formula?: string }) =>
-        ({ commands }) => {
+        ({ commands }: { commands: any }) => {
           return commands.insertContent({
             type: this.name,
             attrs: { formula: attrs?.formula || '' },

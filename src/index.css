@@ -2,11 +2,94 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Notion-like global styles */
+/* 方案「和纸稿纸」global styles：暖纸底 + 墨色文字 */
+html {
+  /* 滚动条槽常驻：防止内容高度在临界点附近时滚动条反复出现/消失，
+     导致居中布局宽度变化→文字重新换行→页面上下抖动的循环 */
+  overflow-y: scroll;
+}
+
 body {
-  background: #ffffff;
-  color: #37352f;
+  background: linear-gradient(180deg, #faf6ee, #f3ede0);
+  background-attachment: fixed;
+  color: #33302a;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Frameless Electron window chrome: menu labels on the left, native controls on the right. */
+.desktop-titlebar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  height: 39px;
+  box-sizing: border-box;
+  background: #fff;
+  border-bottom: 1px solid #e3dac7;
+  color: #33302a;
+  user-select: none;
+  -webkit-app-region: drag;
+}
+
+.desktop-titlebar__menus {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+  padding-left: 2px;
+  -webkit-app-region: no-drag;
+}
+
+.desktop-titlebar__menu {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.desktop-titlebar__drag-space {
+  flex: 1;
+  min-width: 12px;
+  height: 100%;
+}
+
+.desktop-titlebar__controls {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+  -webkit-app-region: no-drag;
+}
+
+.desktop-titlebar__control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 100%;
+  color: #33302a;
+  transition: background-color 0.12s, color 0.12s;
+}
+
+.desktop-titlebar__control:hover {
+  background: #f3ede0;
+}
+
+.desktop-titlebar__control:focus-visible,
+.desktop-titlebar__menu:focus-visible {
+  outline: 2px solid #b07830;
+  outline-offset: -2px;
+}
+
+.desktop-titlebar__control svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.7;
+}
+
+.desktop-titlebar__control--close:hover {
+  background: #c94b43;
+  color: #fff;
 }
 
 /* TipTap editor styles */
@@ -23,7 +106,7 @@ body {
 .ProseMirror p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   float: left;
-  color: #b4b4b0;
+  color: #94a3b8;
   pointer-events: none;
   height: 0;
 }
@@ -31,18 +114,23 @@ body {
 /* Headings */
 .ProseMirror h1 {
   font-size: 2em;
-  font-weight: 700;
-  line-height: 1.2;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
   margin-top: 1.5em;
   margin-bottom: 0.3em;
 }
 
+/* h2 带天蓝左色条，是彩谱方案的章节锤点 */
 .ProseMirror h2 {
   font-size: 1.5em;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1.3;
-  margin-top: 1.2em;
-  margin-bottom: 0.3em;
+  letter-spacing: -0.01em;
+  margin-top: 1.4em;
+  margin-bottom: 0.4em;
+  padding-left: 14px;
+  border-left: 4px solid #38bdf8;
 }
 
 .ProseMirror h3 {
@@ -53,37 +141,49 @@ body {
   margin-bottom: 0.2em;
 }
 
-/* Blockquote */
-.ProseMirror blockquote {
-  border-left: 3px solid #e8e8e5;
-  padding-left: 1em;
-  color: #787774;
-  margin: 0.8em 0;
+/* 段落：舒适阅读行高 */
+.ProseMirror p {
+  line-height: 1.85;
+  color: #334155;
 }
 
-/* Code block */
+/* Blockquote：紫色引用块 */
+.ProseMirror blockquote {
+  border-left: 4px solid #a855f7;
+  background: #faf5ff;
+  border-radius: 0 10px 10px 0;
+  padding: 12px 18px;
+  color: #6b21a8;
+  margin: 1em 0;
+}
+
+.ProseMirror blockquote p {
+  color: inherit;
+}
+
+/* Code block：深 Slate 底，页面的视觉锚点 */
 .ProseMirror pre {
   position: relative;
-  background: #f7f6f3;
-  border: 1px solid rgba(55, 53, 47, 0.08);
-  border-radius: 10px;
+  background: #0f172a;
+  border: none;
+  border-radius: 12px;
   padding: 1.25rem 1.35rem;
   font-family: "JetBrains Mono", "Fira Code", SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.9rem;
-  line-height: 1.75;
-  color: #37352f;
+  font-size: 0.875rem;
+  line-height: 1.8;
+  color: #e2e8f0;
   overflow-x: auto;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.16);
 }
 
 .ProseMirror code {
-  background: rgba(135, 131, 120, 0.14);
-  border: 1px solid rgba(135, 131, 120, 0.08);
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
   border-radius: 5px;
-  padding: 0.16em 0.38em;
+  padding: 0.14em 0.4em;
   font-family: "JetBrains Mono", "Fira Code", SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.875em;
-  color: #c23b22;
+  color: #0369a1;
 }
 
 .ProseMirror pre code {
@@ -144,24 +244,853 @@ body {
   font-family: inherit;
 }
 
-.ProseMirror pre .hljs-keyword,
-.ProseMirror pre .hljs-selector-tag,
-.ProseMirror pre .hljs-title {
-  color: #8f5c00;
+/* ─────────────────────────────────────────────────────────────────────────
+   思维导图 · 交互式画布（稿纸质感）
+   源码（```mindmap 代码块）退居文件格式，界面上只出现这张纸。
+   节点定位全部由 src/lib/mindmapLayout.ts 计算，CSS 只管长相，别在这里加
+   position/left/top，否则布局引擎算出来的坐标会被覆盖。
+   ───────────────────────────────────────────────────────────────────────── */
+.mindmap-code-block {
+  margin: 1rem 0;
 }
 
+/* 源码区：默认压成 0 高度但保留在 DOM 里，ProseMirror 需要 contentDOM 一直存在 */
+.mindmap-source {
+  margin-top: 0.5rem;
+}
+
+.mindmap-source.is-hidden {
+  max-height: 0;
+  margin-top: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.mmap {
+  position: relative;
+  border-radius: 3px 10px 4px 9px;
+  background:
+    repeating-linear-gradient(to bottom, transparent 0 27px, rgba(120, 104, 74, 0.055) 27px 28px),
+    radial-gradient(120% 90% at 18% 0%, #fdfbf6 0%, #fbf7ef 46%, #f6f0e4 100%);
+  box-shadow:
+    0 1px 0 rgba(120, 104, 74, 0.1),
+    0 10px 28px -18px rgba(120, 104, 74, 0.42);
+  padding: 8px 10px 12px;
+  overflow: hidden;
+  user-select: none;
+}
+
+.mmap.is-focused {
+  box-shadow:
+    0 0 0 1.5px rgba(192, 74, 26, 0.35),
+    0 10px 28px -18px rgba(120, 104, 74, 0.42);
+}
+
+.mmap__bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 2px 6px;
+}
+
+.mmap__title {
+  font-family: "KaiTi", "STKaiti", "Kaiti SC", Georgia, serif;
+  font-size: 13px;
+  color: #9c8a68;
+  letter-spacing: 0.05em;
+}
+
+.mmap__spacer {
+  flex: 1;
+}
+
+.mmap__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  color: #8b7a5c;
+  transition: background 0.12s, color 0.12s;
+}
+
+.mmap__btn:hover:not(:disabled) {
+  background: rgba(192, 74, 26, 0.1);
+  color: #c04a1a;
+}
+
+.mmap__btn.is-active {
+  background: rgba(192, 74, 26, 0.14);
+  color: #c04a1a;
+}
+
+.mmap__btn:disabled {
+  opacity: 0.35;
+}
+
+.mmap__btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.mmap__srcbtn {
+  margin-left: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(120, 104, 74, 0.28);
+  font-size: 11px;
+  color: #8b7a5c;
+  font-family: "JetBrains Mono", SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.mmap__srcbtn.is-active,
+.mmap__srcbtn:hover {
+  border-color: #c04a1a;
+  color: #c04a1a;
+}
+
+.mmap__hints,
+.mmap__mode {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  border-radius: 8px;
+  background: rgba(255, 253, 248, 0.75);
+  border: 1px dashed rgba(120, 104, 74, 0.28);
+  font-size: 11.5px;
+  color: #7d6f56;
+  line-height: 1.6;
+}
+
+.mmap__hints b {
+  color: #c04a1a;
+  font-weight: 700;
+}
+
+.mmap__mode {
+  color: #c04a1a;
+  border-style: solid;
+  border-color: rgba(192, 74, 26, 0.35);
+}
+
+.mmap__scroll {
+  overflow: auto;
+  max-height: 70vh;
+}
+
+.mmap__stage {
+  position: relative;
+  margin: 0 auto;
+  outline: none;
+}
+
+.mmap__links {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+
+.mmap-link {
+  fill: none;
+  stroke: #c3b394;
+  stroke-linecap: round;
+  opacity: 0.92;
+  pointer-events: none;
+}
+
+/* ── 节点 ── */
+.mmap-node {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-family: "KaiTi", "STKaiti", "Kaiti SC", "TW-Kai", "AR PL UKai CN", Georgia, "Noto Serif SC", serif;
+  overflow-wrap: break-word;
+  text-wrap: pretty;
+  cursor: default;
+  touch-action: none;
+}
+
+.mmap-node__row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mmap-node--root {
+  max-width: 240px;
+  background: #c04a1a;
+  color: #fdf6ee;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.35;
+  text-align: center;
+  padding: 9px 16px 10px;
+  border-radius: 13px 8px 14px 9px;
+  box-shadow: 1.5px 2px 0 rgba(58, 52, 43, 0.85);
+}
+
+.mmap-node--branch {
+  max-width: 210px;
+  background: #fffdf8;
+  color: #3a342b;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  line-height: 1.4;
+  padding: 6px 13px 7px;
+  border: 1.6px solid #3a342b;
+  border-radius: 11px 7px 12px 8px;
+  box-shadow: 1px 1.5px 0 rgba(58, 52, 43, 0.55);
+}
+
+.mmap-node--leaf {
+  max-width: 210px;
+  font-size: 13.5px;
+  color: #5a5145;
+  line-height: 1.5;
+  padding: 3px 6px;
+  border: 1.4px solid transparent;
+  border-radius: 8px 6px 9px 5px;
+}
+
+/* 叶子前的橙点：左侧节点用 row-reverse，::before 会自然落到朝内的一侧 */
+.mmap-node--leaf .mmap-node__row::before {
+  content: "·";
+  color: #c04a1a;
+  font-weight: 700;
+  font-size: 17px;
+  line-height: 0;
+}
+
+.mmap-node--leaf.is-left {
+  text-align: right;
+}
+
+.mmap-node--leaf.is-left .mmap-node__row {
+  flex-direction: row-reverse;
+}
+
+.mmap-node--leaf:hover {
+  border-color: rgba(120, 104, 74, 0.35);
+}
+
+.mmap-node.is-selected {
+  box-shadow: 0 0 0 2px rgba(192, 74, 26, 0.55);
+}
+
+.mmap-node--root.is-selected {
+  box-shadow: 1.5px 2px 0 rgba(58, 52, 43, 0.85), 0 0 0 2px rgba(192, 74, 26, 0.55);
+}
+
+.mmap-node--branch.is-selected {
+  box-shadow: 1px 1.5px 0 rgba(58, 52, 43, 0.55), 0 0 0 2px rgba(192, 74, 26, 0.55);
+}
+
+.mmap-node--leaf.is-selected {
+  border-color: rgba(192, 74, 26, 0.55);
+  box-shadow: none;
+}
+
+.mmap-node.is-dragging {
+  opacity: 0.45;
+}
+
+.mmap-node.is-linksource {
+  box-shadow: 0 0 0 2px rgba(51, 126, 169, 0.6);
+}
+
+.mmap-node__label {
+  white-space: pre-wrap;
+}
+
+.mmap-node__edit {
+  min-width: 48px;
+  outline: none;
+  white-space: pre-wrap;
+  border-bottom: 1px dashed currentColor;
+  cursor: text;
+  user-select: text;
+}
+
+.mmap-node__img {
+  display: block;
+  max-width: 150px;
+  max-height: 110px;
+  margin: 0 auto 4px;
+  border-radius: 6px;
+}
+
+.mmap-node__pri {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  flex: none;
+  border-radius: 50%;
+  color: #fff;
+  font-family: system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.mmap-node__progress {
+  display: inline-flex;
+  flex: none;
+}
+
+.mmap-node__flag {
+  display: inline-flex;
+  flex: none;
+  color: #c04a1a;
+}
+
+.mmap-node__flag svg {
+  width: 13px;
+  height: 13px;
+}
+
+.mmap-node__flag--check {
+  color: #448361;
+}
+
+.mmap-node__flag--question,
+.mmap-node__flag--idea {
+  color: #cb912f;
+}
+
+.mmap-node__flag--warn {
+  color: #d9730d;
+}
+
+.mmap-node__badge {
+  display: inline-flex;
+  flex: none;
+  color: #9c8a68;
+}
+
+.mmap-node__badge:hover {
+  color: #c04a1a;
+}
+
+.mmap-node__badge svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* 折叠圆点：挂在节点朝外的一侧 */
+.mmap-node__toggle {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 999px;
+  border: 1.3px solid rgba(120, 104, 74, 0.55);
+  background: #fffdf8;
+  color: #8b7a5c;
+  font-family: system-ui, sans-serif;
+  font-size: 9.5px;
+  line-height: 1;
+}
+
+.mmap-node__toggle:hover {
+  border-color: #c04a1a;
+  color: #c04a1a;
+}
+
+.mmap-node.is-right > .mmap-node__toggle {
+  right: -8px;
+}
+
+.mmap-node.is-left > .mmap-node__toggle {
+  left: -8px;
+}
+
+/* ── 拖拽指示 ── */
+.mmap-drop {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+
+.mmap-drop--child {
+  border: 2px dashed #c04a1a;
+  border-radius: 10px;
+  background: rgba(192, 74, 26, 0.06);
+}
+
+.mmap-drop--order {
+  height: 2px;
+  background: #c04a1a;
+  border-radius: 2px;
+}
+
+/* ── 装饰 ── */
+.mmap-boundary rect {
+  fill: rgba(192, 74, 26, 0.045);
+  stroke: rgba(192, 74, 26, 0.45);
+  stroke-width: 1.4;
+  stroke-dasharray: 6 5;
+  cursor: pointer;
+}
+
+.mmap-boundary text {
+  fill: #a8703f;
+  font-size: 11px;
+  font-family: "KaiTi", "STKaiti", Georgia, serif;
+}
+
+.mmap-boundary.is-selected rect {
+  stroke: #c04a1a;
+  stroke-width: 2;
+}
+
+.mmap-summary path {
+  fill: none;
+  stroke: #9c8a68;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  cursor: pointer;
+}
+
+.mmap-summary.is-selected path {
+  stroke: #c04a1a;
+}
+
+.mmap-summary__label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  margin-top: -9px;
+  font-family: "KaiTi", "STKaiti", Georgia, serif;
+  font-size: 12.5px;
+  color: #7d6f56;
+  background: rgba(255, 253, 248, 0.85);
+  border-radius: 6px;
+  padding: 1px 5px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* 左臂的概要文字挂在括号左边，用 translateX(-100%) 避免测量宽度 */
+.mmap-summary__label.is-left {
+  transform-origin: right center;
+}
+
+.mmap-relation__hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 12;
+  cursor: pointer;
+}
+
+.mmap-relation__line {
+  fill: none;
+  stroke: #337ea9;
+  stroke-width: 1.4;
+  stroke-dasharray: 5 4;
+  pointer-events: none;
+}
+
+.mmap-relation__arrow {
+  fill: #337ea9;
+  stroke: none;
+  pointer-events: none;
+}
+
+.mmap-relation text {
+  fill: #337ea9;
+  font-size: 11px;
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: rgba(253, 250, 243, 0.9);
+  stroke-width: 3;
+  font-family: "KaiTi", "STKaiti", Georgia, serif;
+  pointer-events: none;
+}
+
+.mmap-relation.is-selected .mmap-relation__line {
+  stroke-width: 2.2;
+}
+
+/* ── 右键菜单 ── */
+.mmap-ctxmenu {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 10;
+  min-width: 168px;
+  padding: 5px;
+  border-radius: 10px;
+  background: #fffdf8;
+  border: 1px solid rgba(120, 104, 74, 0.3);
+  box-shadow: 0 10px 28px -14px rgba(120, 104, 74, 0.55);
+  user-select: none;
+}
+
+.mmap-ctxmenu button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  color: #3a342b;
+  text-align: left;
+  transition: background 0.12s, color 0.12s;
+}
+
+.mmap-ctxmenu button:hover:not(:disabled) {
+  background: rgba(192, 74, 26, 0.1);
+  color: #c04a1a;
+}
+
+.mmap-ctxmenu button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.mmap-ctxmenu button.is-danger:hover:not(:disabled) {
+  background: rgba(212, 76, 71, 0.12);
+  color: #d44c47;
+}
+
+.mmap-ctxmenu__key {
+  font-family: "JetBrains Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10.5px;
+  color: #9c8a68;
+}
+
+.mmap-ctxmenu__sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: rgba(120, 104, 74, 0.22);
+}
+
+/* ── 缩放与专注编辑 ── */
+.mmap__zoombox {
+  position: relative;
+  margin: 0 auto;
+}
+
+.mmap__zoomctl {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  margin-left: 6px;
+  padding-left: 7px;
+  border-left: 1px solid rgba(120, 104, 74, 0.22);
+}
+
+.mmap__zoomlabel {
+  min-width: 42px;
+  padding: 2px 4px;
+  border-radius: 6px;
+  font-size: 11px;
+  color: #8b7a5c;
+  font-variant-numeric: tabular-nums;
+  transition: background 0.12s, color 0.12s;
+}
+
+.mmap__zoomlabel:hover {
+  background: rgba(192, 74, 26, 0.1);
+  color: #c04a1a;
+}
+
+/* 节点悬浮的快捷添加按钮：+ 子节点 / 同级 */
+.mmap-node__quick {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 12px);
+  transform: translateY(-50%);
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.12s;
+  z-index: 5;
+}
+
+.mmap-node.is-left > .mmap-node__quick {
+  left: auto;
+  right: calc(100% + 12px);
+}
+
+.mmap-node:hover > .mmap-node__quick,
+.mmap-node.is-selected > .mmap-node__quick {
+  opacity: 1;
+}
+
+.mmap-node__quick button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1.3px solid rgba(120, 104, 74, 0.55);
+  background: #fffdf8;
+  color: #8b7a5c;
+  box-shadow: 0 1px 3px rgba(120, 104, 74, 0.28);
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.mmap-node__quick button:hover {
+  background: #c04a1a;
+  border-color: #c04a1a;
+  color: #fffdf8;
+}
+
+.mmap-node__quick svg {
+  width: 11px;
+  height: 11px;
+}
+
+/* 专注（全屏）编辑页 */
+.mmap-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  background:
+    repeating-linear-gradient(to bottom, transparent 0 27px, rgba(120, 104, 74, 0.05) 27px 28px),
+    radial-gradient(120% 90% at 18% 0%, #fdfbf6 0%, #fbf7ef 46%, #f4eee1 100%);
+}
+
+.mmap-fullscreen__bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(120, 104, 74, 0.2);
+  background: rgba(251, 247, 239, 0.92);
+}
+
+.mmap-fullscreen__title {
+  font-family: "KaiTi", "STKaiti", "Kaiti SC", Georgia, serif;
+  font-size: 14px;
+  color: #5a4f3c;
+}
+
+.mmap-fullscreen__tip {
+  font-size: 12px;
+  color: #9c8a68;
+}
+
+.mmap-fullscreen__close {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(192, 74, 26, 0.45);
+  background: #fffdf8;
+  color: #c04a1a;
+  font-size: 12.5px;
+  transition: background 0.12s, color 0.12s;
+}
+
+.mmap-fullscreen__close:hover {
+  background: #c04a1a;
+  color: #fffdf8;
+}
+
+.mmap-fullscreen__close svg {
+  width: 13px;
+  height: 13px;
+}
+
+.mmap-fullscreen__body {
+  flex: 1;
+  min-height: 0;
+  padding: 14px 18px 18px;
+}
+
+.mmap.is-fullscreen {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  box-shadow: none;
+  border: 1px solid rgba(120, 104, 74, 0.22);
+}
+
+.mmap.is-fullscreen .mmap__scroll {
+  flex: 1;
+  max-height: none;
+}
+
+/* ── 备注气泡 ── */
+.mmap-note {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 5;
+  max-width: 260px;
+  padding: 8px 22px 9px 10px;
+  border-radius: 8px;
+  background: #fffdf5;
+  border: 1px solid rgba(120, 104, 74, 0.3);
+  box-shadow: 0 8px 20px -12px rgba(120, 104, 74, 0.6);
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: #5a5145;
+  white-space: pre-wrap;
+  user-select: text;
+}
+
+.mmap-note__close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  color: #9c8a68;
+}
+
+.mmap-note__close svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* ── 装饰面板 ── */
+.mmap__panel {
+  margin-top: 8px;
+  padding: 8px 10px 10px;
+  border-radius: 8px;
+  background: rgba(255, 253, 248, 0.9);
+  border: 1px solid rgba(120, 104, 74, 0.25);
+  font-size: 12px;
+  color: #6b5f4a;
+}
+
+.mmap__panel-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 6px;
+  font-weight: 600;
+  color: #8b7a5c;
+}
+
+.mmap__panel-empty {
+  color: #9c8a68;
+  padding: 4px 0;
+}
+
+.mmap__field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.mmap__field > span:first-child {
+  flex: none;
+  width: 42px;
+  color: #9c8a68;
+}
+
+.mmap__field--note {
+  align-items: flex-start;
+}
+
+.mmap__field input[type="text"],
+.mmap__field textarea {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 7px;
+  border-radius: 6px;
+  border: 1px solid rgba(120, 104, 74, 0.3);
+  background: #fffefb;
+  font-size: 12px;
+  color: #3a342b;
+  outline: none;
+  user-select: text;
+}
+
+.mmap__field input[type="text"]:focus,
+.mmap__field textarea:focus {
+  border-color: #c04a1a;
+}
+
+.mmap__field textarea {
+  resize: vertical;
+  line-height: 1.6;
+  font-family: inherit;
+}
+
+.mmap__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.mmap__chips--grow {
+  flex: 1;
+}
+
+.mmap__chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 6px;
+  border: 1px solid rgba(120, 104, 74, 0.3);
+  background: #fffefb;
+  font-size: 11px;
+  color: #6b5f4a;
+}
+
+.mmap__chip:hover {
+  border-color: #c04a1a;
+  color: #c04a1a;
+}
+
+.mmap__chip.is-active {
+  background: rgba(192, 74, 26, 0.12);
+  border-color: #c04a1a;
+  color: #c04a1a;
+}
+
+.mmap__chip--icon svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* 暗底代码块的语法高亮：天蓝关键字 / 琥珀函数 / 绿字符串 */
+.ProseMirror pre .hljs-keyword,
+.ProseMirror pre .hljs-selector-tag {
+  color: #7dd3fc;
+}
+.ProseMirror pre .hljs-title {
+  color: #fbbf24;
+}
 .ProseMirror pre .hljs-string,
 .ProseMirror pre .hljs-attr {
-  color: #2f7d52;
+  color: #86efac;
 }
 
 .ProseMirror pre .hljs-number,
 .ProseMirror pre .hljs-literal {
-  color: #9f4f96;
+  color: #f0abfc;
 }
 
 .ProseMirror pre .hljs-comment {
-  color: #8b8a86;
+  color: #64748b;
 }
 
 /* Lists */
@@ -194,20 +1123,20 @@ body {
 .ProseMirror ul[data-type="taskList"] li input[type="checkbox"] {
   margin-top: 0.3em;
   cursor: pointer;
-  accent-color: #2383e2;
+  accent-color: #0284c7;
 }
 
 /* Images */
 .ProseMirror img {
   max-width: 100%;
   height: auto;
-  border-radius: 4px;
+  border-radius: 10px;
   margin: 0.5em 0;
 }
 
 /* Links */
 .ProseMirror a {
-  color: #2383e2;
+  color: #0284c7;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -215,7 +1144,7 @@ body {
 /* Horizontal rule */
 .ProseMirror hr {
   border: none;
-  border-top: 1px solid #e8e8e5;
+  border-top: 1px solid #e2e8f0;
   margin: 1.5em 0;
 }
 
@@ -228,14 +1157,14 @@ body {
 
 .ProseMirror th,
 .ProseMirror td {
-  border: 1px solid #e8e8e5;
+  border: 1px solid #e2e8f0;
   padding: 0.5em 0.75em;
   text-align: left;
   min-width: 80px;
 }
 
 .ProseMirror th {
-  background: #f7f6f3;
+  background: #f8fafc;
   font-weight: 600;
 }
 
@@ -247,7 +1176,7 @@ body {
 
 /* Selection */
 .ProseMirror ::selection {
-  background: rgba(35, 131, 226, 0.28);
+  background: rgba(14, 165, 233, 0.22);
 }
 
 /* Scrollbar */
@@ -258,9 +1187,9 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #d3d3d0;
+  background: #cbd5e1;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #b4b4b0;
+  background: #94a3b8;
 }

@@ -8,6 +8,8 @@ export interface PostMeta {
   category: string;
   tags: string[];
   updatedDate?: string | null;
+  /** 是否已被 git 跟踪（即已发布到 GitHub） */
+  published?: boolean;
 }
 
 export interface PostDetail {
@@ -48,6 +50,35 @@ export interface BlogSettings {
   branch: string;
 }
 
+export interface DesktopApi {
+  minimize: () => Promise<void>;
+  toggleMaximize: () => Promise<boolean>;
+  close: () => Promise<void>;
+  isMaximized: () => Promise<boolean>;
+  onMaximizedChange: (callback: (isMaximized: boolean) => void) => () => void;
+}
+
+export interface DraftMeta {
+  slug: string;
+  filename: string;
+  title: string;
+  pubDate: string;
+}
+
+export interface PublishResult {
+  success: boolean;
+  message: string;
+  details?: string;
+  noop?: boolean;
+}
+
+export interface WithdrawResult {
+  success: boolean;
+  message: string;
+  details?: string;
+  draft?: string;
+}
+
 export interface BlogApi {
   listPosts: () => Promise<PostMeta[]>;
   getPost: (slug: string) => Promise<PostDetail>;
@@ -61,6 +92,11 @@ export interface BlogApi {
     payload: { frontmatter: PostDetail['frontmatter']; content: string }
   ) => Promise<{ success: boolean; slug: string; filename: string }>;
   deletePost: (slug: string) => Promise<{ success: boolean }>;
+  publishPost: (slug: string) => Promise<PublishResult>;
+  withdrawPost: (slug: string) => Promise<WithdrawResult>;
+  listDrafts: () => Promise<DraftMeta[]>;
+  restoreDraft: (slug: string) => Promise<PublishResult>;
+  deleteDraft: (slug: string) => Promise<{ success: boolean }>;
   uploadImage: (payload: {
     name: string;
     type: string;
@@ -85,5 +121,6 @@ export interface BlogApi {
 declare global {
   interface Window {
     blogApi: BlogApi;
+    desktopApi?: DesktopApi;
   }
 }
